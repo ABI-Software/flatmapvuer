@@ -1,47 +1,122 @@
 <template>
-  <div class="flatmap-container"
-      v-loading="loading"
-      element-loading-text="Loading..."
-      element-loading-spinner="el-icon-loading"
-      element-loading-background="rgba(0, 0, 0, 0.3)">
-    <SvgSpriteColor/>
+  <div
+    v-loading="loading"
+    class="flatmap-container"
+    element-loading-text="Loading..."
+    element-loading-spinner="el-icon-loading"
+    element-loading-background="rgba(0, 0, 0, 0.3)"
+  >
+    <SvgSpriteColor />
     <div style="height:100%;width:100%;position:relative">
-      <div style="height:100%;width:100%;" ref="display"></div>
-      <el-popover :content="warningMessage" placement="right"
-        v-if="displayWarning" :appendToBody=false trigger="manual" popper-class="warning-popper right-popper" v-model="hoverVisibilities[6].value"
-        ref="warningPopover">
-      </el-popover>
-      <i class="el-icon-warning warning-icon" v-if="displayWarning" 
-        @mouseover="showToolitip(6)" @mouseout="hideToolitip(6)"
-        v-popover:warningPopover>
+      <div
+        ref="display"
+        style="height:100%;width:100%;"
+      />
+      <el-popover
+        v-if="displayWarning"
+        ref="warningPopover"
+        v-model="hoverVisibilities[6].value"
+        :content="warningMessage"
+        placement="right"
+        :append-to-body="false"
+        trigger="manual"
+        popper-class="warning-popper right-popper"
+      />
+      <i
+        v-if="displayWarning"
+        v-popover:warningPopover 
+        class="el-icon-warning warning-icon"
+        @mouseover="showToolitip(6)"
+        @mouseout="hideToolitip(6)"
+      >
         <span class="warning-text">Beta</span>
       </i>
       <div class="bottom-right-control">
-        <el-popover content="Zoom in" placement="left" 
-          :appendToBody=false trigger="manual" popper-class="flatmap-popper left-popper" v-model="hoverVisibilities[0].value">
-          <SvgIcon icon="zoomIn" class="icon-button zoomIn" slot="reference" @click.native="zoomIn()"
-            @mouseover.native="showToolitip(0)" @mouseout.native="hideToolitip(0)"/>
+        <el-popover
+          v-model="hoverVisibilities[0].value"
+          content="Zoom in" 
+          placement="left"
+          :append-to-body="false"
+          trigger="manual"
+          popper-class="flatmap-popper left-popper"
+        >
+          <SvgIcon
+            slot="reference"
+            icon="zoomIn"
+            class="icon-button zoomIn"
+            @click.native="zoomIn()"
+            @mouseover.native="showToolitip(0)"
+            @mouseout.native="hideToolitip(0)"
+          />
         </el-popover>
-        <el-popover content="Zoom out" placement="top-end"
-          :appendToBody=false trigger="manual" popper-class="flatmap-popper popper-zoomout" v-model="hoverVisibilities[1].value">
-          <SvgIcon icon="zoomOut" class="icon-button zoomOut" slot="reference" @click.native="zoomOut()"
-            @mouseover.native="showToolitip(1)" @mouseout.native="hideToolitip(1)"/>
+        <el-popover
+          v-model="hoverVisibilities[1].value"
+          content="Zoom out"
+          placement="top-end"
+          :append-to-body="false"
+          trigger="manual"
+          popper-class="flatmap-popper popper-zoomout"
+        >
+          <SvgIcon
+            slot="reference"
+            icon="zoomOut"
+            class="icon-button zoomOut"
+            @click.native="zoomOut()"
+            @mouseover.native="showToolitip(1)"
+            @mouseout.native="hideToolitip(1)"
+          />
         </el-popover>
-        <el-popover content="Reset" placement="top"
-          :appendToBody=false trigger="manual" popper-class="flatmap-popper" v-model="hoverVisibilities[2].value">
-          <SvgIcon icon="resetZoom" class="icon-button resetView" slot="reference" @click.native="resetView()"
-            @mouseover.native="showToolitip(2)" @mouseout.native="hideToolitip(2)"/>
+        <el-popover
+          v-model="hoverVisibilities[2].value"
+          content="Reset"
+          placement="top"
+          :append-to-body="false"
+          trigger="manual"
+          popper-class="flatmap-popper"
+        >
+          <SvgIcon
+            slot="reference"
+            icon="resetZoom"
+            class="icon-button resetView"
+            @click.native="resetView()"
+            @mouseover.native="showToolitip(2)"
+            @mouseout.native="hideToolitip(2)"
+          />
         </el-popover>
       </div>
-      <el-popover content="Change pathway visibility" placement="right"
-        :appendToBody=false trigger="manual" popper-class="flatmap-popper right-popper" v-model="hoverVisibilities[4].value" ref="checkBoxPopover"/>
-      <div class="pathway-location" :class="{ open: drawerOpen, close: !drawerOpen }">
-        <div class="pathway-container" v-if="pathways.length > 0 && pathControls"
-           v-popover:checkBoxPopover>
-          <el-popover content="Find these markers for data" placement="right"
-            :appendToBody=false trigger="manual" popper-class="flatmap-popper popper-bump-right  right-popper" v-model="hoverVisibilities[5].value" ref="markerPopover">
-          </el-popover>
-          <div v-show="hoverVisibilities[5].value" class="flatmap-marker-help" v-html="flatmapMarker" v-popover:markerPopover></div>
+      <el-popover
+        ref="checkBoxPopover"
+        v-model="hoverVisibilities[4].value"
+        content="Change pathway visibility"
+        placement="right"
+        :append-to-body="false"
+        trigger="manual"
+        popper-class="flatmap-popper right-popper"
+      />
+      <div
+        class="pathway-location"
+        :class="{ open: drawerOpen, close: !drawerOpen }"
+      >
+        <div
+          v-if="pathways.length > 0 && pathControls"
+          v-popover:checkBoxPopover
+          class="pathway-container"
+        >
+          <el-popover
+            ref="markerPopover"
+            v-model="hoverVisibilities[5].value"
+            content="Find these markers for data"
+            placement="right"
+            :append-to-body="false"
+            trigger="manual"
+            popper-class="flatmap-popper popper-bump-right  right-popper"
+          />
+          <div
+            v-show="hoverVisibilities[5].value"
+            v-popover:markerPopover
+            class="flatmap-marker-help"
+            v-html="flatmapMarker"
+          />
           <el-row>
             <el-col :span="12">
               <div class="pathways-display-text">
@@ -49,50 +124,90 @@
               </div>
             </el-col>
             <el-col :span="12">
-              <el-checkbox class="all-checkbox" :indeterminate="isIndeterminate" v-model="checkAll" @change="handleCheckAllChange">Display all</el-checkbox>
+              <el-checkbox
+                v-model="checkAll"
+                class="all-checkbox"
+                :indeterminate="isIndeterminate"
+                @change="handleCheckAllChange"
+              >
+                Display all
+              </el-checkbox>
             </el-col>
           </el-row>
-          <el-checkbox-group v-model="checkedItems" size="small" 
-            class="checkbox-group" @change="handleCheckedItemsChange">
+          <el-checkbox-group
+            v-model="checkedItems"
+            size="small" 
+            class="checkbox-group"
+            @change="handleCheckedItemsChange"
+          >
             <div class="checkbox-group-inner">
-              <el-row v-for="item in pathways" :key="item.type" :label="item.type">
+              <el-row
+                v-for="item in pathways"
+                :key="item.type"
+                :label="item.type"
+              >
                 <div class="checkbox-container">
                   <el-checkbox
                     class="my-checkbox"
                     :label="item.type"
-                    @change="visibilityToggle()"
                     :checked="true"
-                  ><div class="path-visual" :class="item.type"></div>{{item.label}}</el-checkbox>
+                    @change="visibilityToggle()"
+                  >
+                    <div
+                      class="path-visual"
+                      :class="item.type"
+                    />{{ item.label }}
+                  </el-checkbox>
                 </div>
               </el-row>
             </div>
           </el-checkbox-group>
         </div>
-        <div @click="toggleDrawer" class="drawer-button" :class="{ open: drawerOpen, close: !drawerOpen }">
-          <i class="el-icon-arrow-left"></i>
+        <div
+          class="drawer-button"
+          :class="{ open: drawerOpen, close: !drawerOpen }"
+          @click="toggleDrawer"
+        >
+          <i class="el-icon-arrow-left" />
         </div>
       </div>
       <el-popover
         ref="backgroundPopover"
         placement="top-start"
         width="128"
-        :appendToBody=false
+        :append-to-body="false"
         trigger="click"
-        popper-class="background-popper">
+        popper-class="background-popper"
+      >
         <el-row class="backgroundText">
           Change background
         </el-row>
-        <el-row class="backgroundChooser" >
-          <div v-for="item in availableBackground" :key="item" 
+        <el-row class="backgroundChooser">
+          <div
+            v-for="item in availableBackground"
+            :key="item" 
             :class="['backgroundChoice', item, item == currentBackground ? 'active' :'']" 
-            @click="backgroundChangeCallback(item)"/>
+            @click="backgroundChangeCallback(item)"
+          />
         </el-row>
       </el-popover>
-      <el-popover  content="Change background color" placement="right" v-model="hoverVisibilities[3].value"
-        :appendToBody=false trigger="manual" popper-class="flatmap-popper right-popper">
-        <SvgIcon v-popover:backgroundPopover icon="changeBckgd" class="icon-button background-colour" 
-          :class="{ open: drawerOpen, close: !drawerOpen }" slot="reference"
-          @mouseover.native="showToolitip(3)" @mouseout.native="hideToolitip(3)"/>
+      <el-popover
+        v-model="hoverVisibilities[3].value"
+        content="Change background color"
+        placement="right"
+        :append-to-body="false"
+        trigger="manual"
+        popper-class="flatmap-popper right-popper"
+      >
+        <SvgIcon
+          slot="reference"
+          v-popover:backgroundPopover
+          icon="changeBckgd" 
+          class="icon-button background-colour"
+          :class="{ open: drawerOpen, close: !drawerOpen }"
+          @mouseover.native="showToolitip(3)"
+          @mouseout.native="hideToolitip(3)"
+        />
       </el-popover>
     </div>
   </div>
@@ -133,9 +248,107 @@ export default {
     SvgIcon,
     SvgSpriteColor
   },
+  props: {
+    entry: {
+      type: String,
+      default: "",
+    },
+    featureInfo: {
+      type: Boolean,
+      default: false,
+    },
+    minZoom: {
+      type: Number,
+      default: 4
+    },
+    pathControls: {
+      type: Boolean,
+      default: true
+    },
+    searchable: {
+      type: Boolean,
+      default: false,
+    },
+    tooltips: {
+      type: Boolean,
+      default: true,      
+    },
+    helpMode: {
+      type: Boolean,
+      default: false
+    },
+    renderAtMounted: {
+      type: Boolean,
+      default: true, 
+    },
+    displayWarning: {
+      type: Boolean,
+      default: true
+    },
+    displayMinimap: {
+      type: Boolean,
+      default: false
+    },
+    warningMessage: {
+      type: String,
+      default: "Beta feature - under active development"
+    },
+    /**
+     * State containing state of the flatmap.
+     */
+    state: {
+      type: Object,
+      default: undefined,
+    },
+    /**
+     * Specify the endpoint of the flatmap server.
+     */
+    flatmapAPI: {
+      type: String,
+      default: "https://mapcore-demo.org/flatmaps/"
+    },
+  },
+  data: function() {
+    return {
+      checkedItems: [],
+      pathways: [],
+      isIndeterminate: false,
+      checkAll: true,
+      hoverVisibilities: [{value: false}, {value: false}, {value: false},
+        {value: false}, {value: false}, {value: false}, {value: false}],
+      inHelp: false,
+      currentBackground: 'white',
+      availableBackground: ['white', 'lightskyblue', 'black' ],
+      loading: false,
+      flatmapMarker: flatmapMarker,
+      drawerOpen: true,
+    };
+  },
+  watch: {
+    entry: function() {
+      if (!this.state)
+        this.createFlatmap();
+    },
+    helpMode: function(val){
+      this.setHelpMode(val);
+    },
+    state: {
+      handler: function(state) {
+        this.setState(state);
+      },
+      immediate: true,
+      deep: true,
+    }
+  },
   beforeCreate: function() {
     this.mapManager = undefined;
     this.mapImp = undefined;
+  },
+  mounted: function() {
+    const flatmap = require("@abi-software/flatmap-viewer");
+    this.mapManager = new flatmap.MapManager(this.flatmapAPI);
+    if (this.renderAtMounted)
+      this.createFlatmap();
   },
   methods: {
     backgroundChangeCallback: function(colour) {
@@ -337,101 +550,6 @@ export default {
           this._viewportToBeSet = state.viewport;
       }
     }
-  },
-  props: {
-    entry: String,
-    featureInfo: {
-      type: Boolean,
-      default: false,
-    },
-    minZoom: {
-      type: Number,
-      default: 4
-    },
-    pathControls: {
-      type: Boolean,
-      default: true
-    },
-    searchable: {
-      type: Boolean,
-      default: false,
-    },
-    tooltips: {
-      type: Boolean,
-      default: true,      
-    },
-    helpMode: {
-      type: Boolean,
-      default: false
-    },
-    renderAtMounted: {
-      type: Boolean,
-      default: true, 
-    },
-    displayWarning: {
-      type: Boolean,
-      default: true
-    },
-    displayMinimap: {
-      type: Boolean,
-      default: false
-    },
-    warningMessage: {
-      type: String,
-      default: "Beta feature - under active development"
-    },
-    /**
-     * State containing state of the flatmap.
-     */
-    state: {
-      type: Object,
-      default: undefined,
-    },
-    /**
-     * Specify the endpoint of the flatmap server.
-     */
-    flatmapAPI: {
-      type: String,
-      default: "https://mapcore-demo.org/flatmaps/"
-    },
-  },
-  data: function() {
-    return {
-      checkedItems: [],
-      pathways: [],
-      isIndeterminate: false,
-      checkAll: true,
-      hoverVisibilities: [{value: false}, {value: false}, {value: false},
-        {value: false}, {value: false}, {value: false}, {value: false}],
-      inHelp: false,
-      currentBackground: 'white',
-      availableBackground: ['white', 'lightskyblue', 'black' ],
-      loading: false,
-      flatmapMarker: flatmapMarker,
-      drawerOpen: true,
-    };
-  },
-  watch: {
-    entry: function() {
-      if (!this.state)
-        this.createFlatmap();
-    },
-    helpMode: function(val){
-      this.setHelpMode(val);
-    },
-    state: {
-      handler: function(state) {
-        this.setState(state);
-      },
-      immediate: true,
-      deep: true,
-    }
-  },
-  mounted: function() {
-    const flatmap = require("@abi-software/flatmap-viewer");
-    this.mapManager = new flatmap.MapManager(this.flatmapAPI);
-    if (this.renderAtMounted)
-      this.createFlatmap();
   }
 };
 </script>

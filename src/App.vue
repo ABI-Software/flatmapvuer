@@ -3,28 +3,65 @@
     <el-popover
       placement="bottom"
       trigger="click"
-      width=500
+      width="500"
       class="popover"
-      :appendToBody=false
-      >
+      :append-to-body="false"
+    >
       <div class="options-container">
         <el-row :gutter="20">
-          <el-button @click="helpMode = !helpMode" size="mini">Help Mode</el-button>
-          <el-button @click="saveSettings()" size="mini">Save Settings</el-button>
-          <el-button @click="restoreSettings()" size="mini">Restore Settings</el-button>
+          <el-button
+            size="mini"
+            @click="helpMode = !helpMode"
+          >
+            Help Mode
+          </el-button>
+          <el-button
+            size="mini"
+            @click="saveSettings()"
+          >
+            Save Settings
+          </el-button>
+          <el-button
+            size="mini"
+            @click="restoreSettings()"
+          >
+            Restore Settings
+          </el-button>
         </el-row>
       </div>
-      <el-button class="options-button" icon="el-icon-setting" slot="reference">Options</el-button>
+      <el-button
+        slot="reference"
+        class="options-button"
+        icon="el-icon-setting"
+      >
+        Options
+      </el-button>
     </el-popover>
   
-    <MultiFlatmapVuer ref="multi" :availableSpecies="availableSpecies" 
-    @resource-selected="FlatmapSelected" :minZoom="minZoom"
-      @ready="FlatmapReady" :featureInfo="featureInfo" :searchable="searchable" 
-      :initial="initial" :pathControls="pathControls" :helpMode="helpMode"
-      :displayMinimap=true :flatmapAPI="flatmapAPI"/>
+    <MultiFlatmapVuer
+      ref="multi"
+      :available-species="availableSpecies" 
+      :min-zoom="minZoom"
+      :feature-info="featureInfo"
+      :searchable="searchable"
+      :initial="initial"
+      :path-controls="pathControls" 
+      :help-mode="helpMode"
+      :display-minimap="true"
+      :flatmap-a-p-i="flatmapAPI"
+      @resource-selected="FlatmapSelected"
+      @ready="FlatmapReady"
+    />
     <div>
-      <TooltipVuer placement="bottom" :visible="visible" :content="tContent" 
-        :position="tStyle" :displayCloseButton="displayCloseButton" ref="tooltip" @onActionClick="onActionClick"/>
+      <TooltipVuer
+        ref="tooltip"
+        placement="bottom"
+        :visible="visible" 
+        :content="tContent"
+        :position="tStyle"
+        :display-close-button="displayCloseButton"
+        @onActionClick="onActionClick"
+      />
     </div>
   </div>
 </template>
@@ -52,28 +89,10 @@ Vue.use(RadioGroup);
 Vue.use(Row);
 
 export default {
-  name: 'app',
-  methods: {
-    saveSettings: function() {
-      this._mapSettings.push(this.$refs.multi.getState());
-    },
-    restoreSettings: function() {
-      if (this._mapSettings.length > 0)
-        this.$refs.multi.setState(this._mapSettings.pop());
-    },
-    FlatmapSelected: function(resource) {
-      let tooltip = this.$refs.tooltip;
-      if (resource.eventType == "mouseenter")
-        this.$refs.multi.showMarkerPopup(resource.feature.id, tooltip.$refs.content.$vnode.elm);
-    },
-    FlatmapReady: function(component) {
-      let taxon = component.mapImp.describes;
-      let id = component.mapImp.addMarker("UBERON:0000948", "simulation");
-      console.log(taxon, id);
-    },
-    onActionClick: function(action) {
-      console.log("onActionClick", action);
-    }
+  name: 'App',
+  components: {
+    MultiFlatmapVuer,
+    TooltipVuer
   },
   data: function(){
     return {
@@ -119,9 +138,27 @@ export default {
   mounted: function() {
     this._mapSettings = [];
   },
-  components: {
-    MultiFlatmapVuer,
-    TooltipVuer
+  methods: {
+    saveSettings: function() {
+      this._mapSettings.push(this.$refs.multi.getState());
+    },
+    restoreSettings: function() {
+      if (this._mapSettings.length > 0)
+        this.$refs.multi.setState(this._mapSettings.pop());
+    },
+    FlatmapSelected: function(resource) {
+      let tooltip = this.$refs.tooltip;
+      if (resource.eventType == "mouseenter")
+        this.$refs.multi.showMarkerPopup(resource.feature.id, tooltip.$refs.content.$vnode.elm);
+    },
+    FlatmapReady: function(component) {
+      let taxon = component.mapImp.describes;
+      let id = component.mapImp.addMarker("UBERON:0000948", "simulation");
+      console.log(taxon, id);
+    },
+    onActionClick: function(action) {
+      console.log("onActionClick", action);
+    }
   }
 }
 </script>

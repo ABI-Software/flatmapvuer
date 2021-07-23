@@ -4,47 +4,62 @@
       <div class="species-display-text">
         Species
       </div>
-      <el-popover content="Select a species" placement="right" 
-        :appendToBody=false trigger="manual" popper-class="flatmap-popper right-popper" v-model="helpMode" ref="selectPopover">
-      </el-popover>
+      <el-popover
+        ref="selectPopover"
+        v-model="helpMode" 
+        content="Select a species"
+        placement="right"
+        :append-to-body="false"
+        trigger="manual"
+        popper-class="flatmap-popper right-popper"
+      />
       <el-select
         id="flatmap-select"
-        :popper-append-to-body="appendToBody"
         v-model="activeSpecies"
+        v-popover:selectPopover
+        :popper-append-to-body="appendToBody"
         placeholder="Select"
         class="select-box"
         popper-class="flatmap_dropdown"
         @change="flatmapChanged"
-        v-popover:selectPopover
       >
-        <el-option v-for="(item, key) in speciesList" :key="key" :label="key" :value="key">
+        <el-option
+          v-for="(item, key) in speciesList"
+          :key="key"
+          :label="key"
+          :value="key"
+        >
           <el-row>
-            <el-col :span="8"><i :class="item.iconClass"></i></el-col>
-            <el-col :span="12">{{ key }}</el-col>
+            <el-col :span="8">
+              <i :class="item.iconClass" />
+            </el-col>
+            <el-col :span="12">
+              {{ key }}
+            </el-col>
           </el-row>
         </el-option>
       </el-select>
     </div>
     <FlatmapVuer
       v-for="(item, key) in speciesList"
-      :key="key"
-      :showLayer="showLayer"
       v-show="activeSpecies==key"
-      :entry="item.taxo"
-      :displayWarning="item.displayWarning"
-      :warningMessage="warningMessage"
+      :key="key"
       :ref="key"
+      :show-layer="showLayer"
+      :entry="item.taxo"
+      :display-warning="item.displayWarning"
+      :warning-message="warningMessage"
+      :feature-info="featureInfo"
+      :min-zoom="minZoom"
+      :path-controls="pathControls"
+      :searchable="searchable"
+      :help-mode="helpMode"
+      :render-at-mounted="renderAtMounted"
+      :display-minimap="displayMinimap"
+      style="height:100%"
+      :flatmap-a-p-i="flatmapAPI"
       @resource-selected="FlatmapSelected"
       @ready="FlatmapReady"
-      :featureInfo="featureInfo"
-      :minZoom="minZoom"
-      :pathControls="pathControls"
-      :searchable="searchable"
-      :helpMode="helpMode"
-      :renderAtMounted="renderAtMounted"
-      :displayMinimap="displayMinimap"
-      style="height:100%"
-      :flatmapAPI="flatmapAPI"
     />
   </div>
 </template>
@@ -69,6 +84,86 @@ export default {
   name: "MultiFlatmapVuer",
   components: {
     FlatmapVuer
+  },
+  props: {
+    showLayer: {
+      type: Boolean,
+      default: false
+    },
+    featureInfo: {
+      type: Boolean,
+      default: false
+    },
+    pathControls: {
+      type: Boolean,
+      default: true
+    },
+    searchable: {
+      type: Boolean,
+      default: false
+    },
+    /**
+     * Initial species for the flatmap.
+     * This value will be ignored if a valid state object is provided.
+     */
+    initial: {
+      type: String,
+      default: ""
+    },
+    minZoom: {
+      type: Number,
+      default: 4
+    },
+    renderAtMounted: {
+      type: Boolean,
+      default: false
+    },
+    helpMode: {
+      type: Boolean,
+      default: false
+    },
+    displayMinimap: {
+      type: Boolean,
+      default: false
+    },
+    warningMessage: {
+      type: String,
+      default: "Beta feature - under active development"
+    },
+    availableSpecies: {
+      type: Object,
+      default: function() { return {} }
+    },
+    /**
+     * State containing state of the flatmap.
+     */
+    state: {
+      type: Object,
+      default: undefined,
+    },
+    /**
+     * Specify the endpoint of the flatmap server.
+     */
+    flatmapAPI: {
+      type: String,
+      default: "https://mapcore-demo.org/flatmaps/"
+    },
+  },
+  data: function() {
+    return {
+      activeSpecies: undefined,
+      appendToBody: false,
+      speciesList: {}
+    };
+  },
+  watch: {
+    state: {
+      handler: function(state) {
+        this.setState(state);
+      },
+      immediate: true,
+      deep: true,
+    }
   },
   mounted: function() {
     fetch(this.flatmapAPI)
@@ -163,83 +258,6 @@ export default {
         }
       }
     },
-  },
-  props: {
-    showLayer: {
-      type: Boolean,
-      default: false
-    },
-    featureInfo: {
-      type: Boolean,
-      default: false
-    },
-    pathControls: {
-      type: Boolean,
-      default: true
-    },
-    searchable: {
-      type: Boolean,
-      default: false
-    },
-    /**
-     * Initial species for the flatmap.
-     * This value will be ignored if a valid state object is provided.
-     */
-    initial: {
-      type: String,
-      default: ""
-    },
-    minZoom: {
-      type: Number,
-      default: 4
-    },
-    renderAtMounted: {
-      type: Boolean,
-      default: false
-    },
-    helpMode: {
-      type: Boolean,
-      default: false
-    },
-    displayMinimap: {
-      type: Boolean,
-      default: false
-    },
-    warningMessage: {
-      type: String,
-      default: "Beta feature - under active development"
-    },
-    availableSpecies: {},
-    /**
-     * State containing state of the flatmap.
-     */
-    state: {
-      type: Object,
-      default: undefined,
-    },
-    /**
-     * Specify the endpoint of the flatmap server.
-     */
-    flatmapAPI: {
-      type: String,
-      default: "https://mapcore-demo.org/flatmaps/"
-    },
-  },
-  data: function() {
-    return {
-      activeSpecies: undefined,
-      appendToBody: false,
-      speciesList: {}
-    };
-  },
-  watch: {
-    state: {
-      handler: function(state) {
-        this.setState(state);
-      },
-      immediate: true,
-      deep: true,
-    }
   }
 };
 </script>
