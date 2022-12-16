@@ -7,7 +7,7 @@
     element-loading-background="rgba(0, 0, 0, 0.3)"
   >
     <map-svg-sprite-color />
-    <div style="height:100%;width:100%;position:relative;overflow-y:none">
+    <div style="height:100%;width:100%;position:relative;overflow-y:none" @click="setLastClickAndCheckPopups">
       <div style="height:100%;width:100%;" ref="display"></div>
       <div class="beta-popovers">
         <div>
@@ -389,9 +389,8 @@ export default {
             userData: args,
             eventType: eventType
           };
-          // Disable the nueron pop up for now.
-          if (data && data.type !== "marker")
-            this.checkAndCreatePopups(payload);
+          this.lastPayload = payload
+          this.lastData = data
           this.$emit("resource-selected", payload);
         } else {
           this.$emit("pan-zoom-callback", data);
@@ -405,12 +404,22 @@ export default {
         this.hasNeuronTooltip(data)
       ) {
         this.createTooltipFromNeuronCuration(data);
-        this.mapImp.showPopup(
+          this.mapImp.showPopup(
           this.mapImp.modelFeatureIds(data.resource[0])[0],
           this.$refs.tooltip.$el,
-          { className: "flatmapvuer-popover", positionAtLastClick: true }
-        );
-        this.popUpCssHacks();
+            { className: "flatmapvuer-popover", positionAtLastClick: true, anchor: this.setAnchor()}
+          );
+          this.popUpCssHacks();
+      }
+    },
+    setAnchor: function(){
+      // note that we are setting the anchor. So anchor on the *right* means tooltip is on the *left*
+
+      let width = this.$refs.display.clientWidth
+      if (this.lastClick.x > width/2){
+        return 'left'
+      } else {
+        return 'right'
       }
     },
     popUpCssHacks: function() {
@@ -708,6 +717,15 @@ export default {
         return this.mapImp.search(term);
       return [];
     },
+    setLastClickAndCheckPopups: function(ev){
+      this.lastClick = {
+        x: ev.x,
+        y: ev.y
+      }
+      if (this.lastData && this.lastData.type !== "marker")
+        this.checkAndCreatePopups(this.lastPayload)
+        this.lastData = undefined // reset incase events object doesn't reset
+    }
   },
   props: {
     entry: String,
@@ -812,7 +830,8 @@ export default {
       drawerOpen: true,
       tooltipContent: { featureIds: []},
       colourRadio: true,
-      outlinesRadio: true
+      outlinesRadio: true,
+      lastClick: {x: 0, y: 0}
     };
   },
   watch: {
