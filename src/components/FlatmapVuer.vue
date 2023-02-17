@@ -389,8 +389,8 @@ export default {
             userData: args,
             eventType: eventType
           };
-          this.lastPayload = payload
-          this.lastData = data
+          this.lastPayload = payload;
+          this.lastData = data;
           this.$emit("resource-selected", payload);
         } else {
           this.$emit("pan-zoom-callback", data);
@@ -404,18 +404,18 @@ export default {
         this.hasNeuronTooltip(data)
       ) {
         this.createTooltipFromNeuronCuration(data);
-          this.mapImp.showPopup(
+        this.mapImp.showPopup(
           this.mapImp.modelFeatureIds(data.resource[0])[0],
           this.$refs.tooltip.$el,
             { className: "flatmapvuer-popover", positionAtLastClick: true, anchor: this.setAnchor()}
-          );
-          this.popUpCssHacks();
+        );
+        this.popUpCssHacks();
       }
     },
     setAnchor: function(){
       // note that we are setting the anchor. So anchor on the *right* means tooltip is on the *left*
 
-      let width = this.$refs.display.clientWidth
+      let width = this.$refs.display.clientWidth;
       if (this.lastClick.x > width/2){
         return 'left'
       } else {
@@ -721,10 +721,10 @@ export default {
       this.lastClick = {
         x: ev.x,
         y: ev.y
-      }
+      };
       if (this.lastData && this.lastData.type !== "marker")
-        this.checkAndCreatePopups(this.lastPayload)
-        this.lastData = undefined // reset incase events object doesn't reset
+        this.checkAndCreatePopups(this.lastPayload);
+        this.lastData = undefined; // reset incase events object doesn't reset
     }
   },
   props: {
@@ -831,7 +831,9 @@ export default {
       tooltipContent: { featureIds: []},
       colourRadio: true,
       outlinesRadio: true,
-      lastClick: {x: 0, y: 0}
+      lastClick: {x: 0, y: 0},
+      lastPayload: {},
+      lastData: {}
     };
   },
   watch: {
