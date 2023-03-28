@@ -1,11 +1,10 @@
 <template>
   <div class="resource-container">
-
-    <span class="attribute-title">Resources</span>
     <template v-for="resource in resources">
       <div class="resource" :key="resource.id">
-        <div><strong>{{capitalise(resource.id)}}</strong></div>
-        <el-link :href="resource.url" target="_blank" class="el-link">{{resource.url}}</el-link>
+        <el-button  v-if="resource.id === 'pubmed'" class="button" icon="el-icon-notebook-2" @click="openUrl(resource.url)">
+          Open publications in pubmed
+        </el-button>
       </div>
     </template>
   </div>

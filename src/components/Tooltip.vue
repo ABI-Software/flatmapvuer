@@ -602,7 +602,7 @@ export default {
 .content-container {
   overflow-y: scroll;
   scrollbar-width: thin !important;
-  height: 200px;
+  max-height: 200px;
 }
 
 .scrollbar::-webkit-scrollbar-track {
