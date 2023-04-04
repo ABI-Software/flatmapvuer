@@ -1,6 +1,7 @@
 <template>
   <div class="resource-container">
     <template v-for="resource in resources">
+      {{resource}}
       <div class="resource" :key="resource.id">
         <el-button  v-if="resource.id === 'pubmed'" class="button" icon="el-icon-notebook-2" @click="openUrl(resource.url)">
           Open publications in pubmed
@@ -34,6 +35,9 @@ export default {
   methods: {
     capitalise: function(string) {
       return string.charAt(0).toUpperCase() + string.slice(1);
+    },
+    openUrl: function(url){
+      window.open(url, '_blank')
     },
   }
 };
