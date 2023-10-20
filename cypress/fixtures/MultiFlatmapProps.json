@@ -48,7 +48,7 @@
   "helpMode": false,
   "pathControls": true,
   "mapSettings": [],
-  "flatmapAPI": "https://mapcore-demo.org/devel/flatmap/v4/",
+  "flatmapAPI": "https://mapcore-demo.org/devel/flatmap/v4/viewer/?id=381999f7-fdec-58ca-a522-62e0c0c64cfe",
   "featureInfo": true,
   "layerControl": true
 }

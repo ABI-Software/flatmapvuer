@@ -30,8 +30,6 @@ describe('MultiFlatmapVuer', () => {
           displayMinimap: props.displayMinimap,
           enableOpenMapUI: props.enableOpenMapUI,
           flatmapAPI: props.flatmapAPI,
-          displayMinimap:true,
-          enableOpenMapUI:true, 
         }
       }).then((vm) => {
         cy.wrap(vm).as('vm')
