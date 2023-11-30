@@ -360,7 +360,6 @@
       <Tooltip
         ref="tooltip"
         class="tooltip"
-        @highlightConnectedPaths="highlightConnectedPaths"
         @onClose="closeTooltip"
         :entry="tooltipEntry"
       />
