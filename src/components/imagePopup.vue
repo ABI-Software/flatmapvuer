@@ -1,7 +1,7 @@
 <template>
   <div v-if="entry" class="main" v-loading="loading">
     <div class="block" v-if="entry.title">
-      <div class="title">{{ capitalise(entry.title) }}</div>
+      <span class="title">{{ capitalise(entry.title) }}</span>
       <div
         v-if="
           entry.provenanceTaxonomyLabel &&
@@ -13,7 +13,7 @@
       </div>
     </div>
     <div class="block" v-else>
-      <div class="title">{{ entry.featureId }}</div>
+      <span class="title">{{ entry.featureId }}</span>
     </div>
     <div class="block">
       <el-button
@@ -28,136 +28,11 @@
       </div>
       <el-button
         class="button"
-        @click="viewImage(imageIframeURL[this.entry.featureId[0]])"
+        @click="viewImage(imageIframeURL)"
       >
         <span>View images at this location (iFrame)</span>
       </el-button>
     </div>
-    <div v-show="showDetails" class="hide" id="hide-path-info" @click="showDetails = false">
-      Hide path information
-      <el-icon><el-icon-arrow-up /></el-icon>
-    </div>
-    <div v-show="!showDetails" class="hide" id="show-path-info" @click="showDetails = true">
-      Show path information
-      <el-icon><el-icon-arrow-down /></el-icon>
-    </div>
-    <transition name="slide-fade">
-      <div v-show="showDetails" class="content-container scrollbar">
-        {{ entry.paths }}
-        <div v-if="entry.origins && entry.origins.length > 0" class="block">
-          <div>
-            <span class="attribute-title">Origin</span>
-            <el-popover
-              width="250"
-              trigger="hover"
-              :teleported="false"
-              popper-class="popover-origin-help"
-            >
-              <template #reference>
-                <el-icon class="info"><el-icon-warning /></el-icon>
-              </template>
-              <span style="word-break: keep-all">
-                <i>Origin</i> {{ originDescription }}
-              </span>
-
-            </el-popover>
-          </div>
-          <div
-            v-for="(origin, i) in entry.origins"
-            class="attribute-content"
-            :origin-item-label="origin"
-            :key="origin"
-          >
-            {{ capitalise(origin) }}
-            <div v-if="i != entry.origins.length - 1" class="seperator"></div>
-          </div>
-          <el-button
-            v-show="
-              entry.originsWithDatasets && entry.originsWithDatasets.length > 0
-            "
-            class="button"
-            id="open-dendrites-button"
-            @click="openDendrites"
-          >
-            Explore origin data
-          </el-button>
-        </div>
-        <div
-          v-if="entry.components && entry.components.length > 0"
-          class="block"
-        >
-          <div class="attribute-title">Components</div>
-          <div
-            v-for="(component, i) in entry.components"
-            class="attribute-content"
-            :component-item-label="component"
-            :key="component"
-          >
-            {{ capitalise(component) }}
-            <div
-              v-if="i != entry.components.length - 1"
-              class="seperator"
-            ></div>
-          </div>
-        </div>
-        <div
-          v-if="entry.destinations && entry.destinations.length > 0"
-          class="block"
-        >
-          <div>
-            <span class="attribute-title">Destination</span>
-            <el-popover
-              width="250"
-              trigger="hover"
-              :teleported="false"
-              popper-class="popover-origin-help"
-            >
-              <template #reference>
-                <el-icon class="info"><el-icon-warning /></el-icon>
-              </template>
-              <span style="word-break: keep-all">
-                <i>Destination</i> is where the axons terminate
-              </span>
-            </el-popover>
-          </div>
-          <div
-            v-for="(destination, i) in entry.destinations"
-            class="attribute-content"
-            :destination-item-label="destination"
-            :key="destination"
-          >
-            {{ capitalise(destination) }}
-            <div
-              v-if="i != entry.destinations.length - 1"
-              class="seperator"
-            ></div>
-          </div>
-          <el-button
-            v-show="
-              entry.destinationsWithDatasets &&
-              entry.destinationsWithDatasets.length > 0
-            "
-            class="button"
-            @click="openAxons"
-          >
-            Explore destination data
-          </el-button>
-        </div>
-
-        <el-button
-          v-show="
-            entry.componentsWithDatasets &&
-            entry.componentsWithDatasets.length > 0
-          "
-          class="button"
-          @click="openAll"
-        >
-          Search for data on components
-        </el-button>
-
-        <external-resource-card :resources="resources"></external-resource-card>
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -214,8 +89,9 @@ const imageIframeURL = {
   'ILX:0793082': 'https://sparc.biolucida.net/image?c=MjIzNzUtY29sLTI1NA%3D%3D'
 }
 
+
 export default {
-  name: 'ProvenancePopup',
+  name: 'ImagePopup',
   components: {
     Button,
     Container,
@@ -335,7 +211,7 @@ export default {
 
 .title {
   text-align: left;
-  // width: 16em;
+  width: 16em;
   line-height: 1.5em !important;
   font-size: 1em;
   font-family: Helvetica;
@@ -346,10 +222,6 @@ export default {
 
 .block {
   margin-bottom: 0.5em;
-
-  .main > &:first-of-type {
-    margin-right: 0.5em;
-  }
 }
 
 .pub {
@@ -523,10 +395,6 @@ export default {
   overflow-y: scroll;
   scrollbar-width: thin !important;
   max-height: 240px;
-
-  .block {
-    padding-top: 0.5em;
-  }
 }
 
 .scrollbar::-webkit-scrollbar-track {

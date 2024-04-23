@@ -499,6 +499,12 @@
         :annotationEntry="annotationEntry"
         :entry="tooltipEntry"
         :annotationDisplay="viewingMode === 'Annotation'"
+        @viewImage="viewIframeImage"
+      />
+      <IframeImageDialog
+        :imageIframeURL="imageIframeURL"
+        :imageIframeOpen="imageIframeOpen"
+        @closeImageIframe="closeImageIframe"
       />
     </div>
   </div>
@@ -517,6 +523,7 @@ import SelectionsGroup from './SelectionsGroup.vue'
 import TreeControls from './TreeControls.vue'
 import { MapSvgIcon, MapSvgSpriteColor } from '@abi-software/svg-sprite'
 import SvgLegends from './legends/SvgLegends.vue'
+import IframeImageDialog from './IframeImageDialog.vue'
 import {
   ElButton as Button,
   ElCol as Col,
@@ -1006,7 +1013,6 @@ export default {
           }
           if (
             data &&
-            data.type !== 'marker' &&
             eventType === 'click' &&
             !(this.viewingMode === 'Network Discovery')
           ) {
@@ -1062,9 +1068,11 @@ export default {
           await this.flatmapQueries.retrieveFlatmapKnowledgeForEvent(data)
         // The line below only creates the tooltip if some data was found on the path
         // result 0 is the connection, result 1 is the pubmed results from flatmap
+        console.log(data)
         if (
           results[0] ||
           results[1] ||
+          data.feature.type === 'marker' ||
           (data.feature.hyperlinks && data.feature.hyperlinks.length > 0)
         ) {
           this.resourceForTooltip = data.resource[0]
@@ -1581,6 +1589,14 @@ export default {
       if (this.mapImp) return this.mapImp.search(term)
       return []
     },
+    viewIframeImage: function (url) {
+      this.imageIframeURL = url
+      this.imageIframeOpen = true
+    },
+    closeImageIframe: function () {
+      this.imageIframeURL = ''
+      this.imageIframeOpen = false
+    },
   },
   props: {
     /**
@@ -1763,6 +1779,8 @@ export default {
       serverURL: undefined,
       layers: [],
       pathways: [],
+      imageIframeOpen: false,
+      imageIframeURL: '',
       sckanDisplay: [
         {
           label: 'Display Path with SCKAN',
