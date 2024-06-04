@@ -100,6 +100,7 @@ import { Setting as ElIconSetting } from '@element-plus/icons-vue'
 /* eslint-disable no-alert, no-console */
 import MultiFlatmapVuer from './components/MultiFlatmapVuer.vue'
 import HelpModeDialog from './components/HelpModeDialog.vue';
+import { AlgoliaClient } from './services/algolia/algolia.js'
 import {
   ElAutocomplete as Autocomplete,
   ElButton as Button,
@@ -140,6 +141,13 @@ export default {
       if (this.consoleOn) console.log('pathway-selection-changed', data);
     },
     FlatmapReady: function (component) {
+      this.algoliaClient = new AlgoliaClient(
+        this.ALGOLIA_ID,
+        this.ALGOLIA_KEY,
+        this.PENNSIEVE_API_LOCATION
+      );
+      this.algoliaClient.initIndex(this.ALGOLIA_INDEX)
+      window.algoliaClient = this.algoliaClient
       if (this.consoleOn) console.log(component)
       let taxon = component.mapImp.describes
       let id = component.mapImp.addMarker('UBERON:0000948')
@@ -148,6 +156,10 @@ export default {
       //component.showPathwaysDrawer(false);
       if (this.consoleOn) console.log(taxon, id)
       //component.searchAndShowResult("heart");
+      this.algoliaClient.getAnatomyForDatasets().then((data) => {
+        console.log(data)
+        component.mapImp.addDatasetMarkers(data)
+      })
     },
     panZoomcallback: function (payload) {
       this.payload = payload
@@ -278,6 +290,9 @@ export default {
       useHelpModeDialog: true,
       multiflatmapRef: null,
       mapSettings: [],
+      ALGOLIA_KEY: import.meta.env.VITE_APP_ALGOLIA_KEY,
+      ALGOLIA_ID: import.meta.env.VITE_APP_ALGOLIA_ID,
+      ALGOLIA_INDEX: import.meta.env.VITE_APP_ALGOLIA_INDEX,
       //flatmapAPI: "https://mapcore-demo.org/current/flatmap/v2/"
       //flatmapAPI: "https://mapcore-demo.org/devel/flatmap/v3/"
       //flatmapAPI: "https://mapcoe-demo.org/current/flatmap/v3/",
@@ -290,6 +305,7 @@ export default {
   },
   mounted: function () {
     this.multiflatmapRef = this.$refs.multi;
+
   },
   watch: {
     helpMode: function (newVal) {
