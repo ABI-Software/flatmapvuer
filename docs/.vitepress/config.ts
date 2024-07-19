@@ -1,4 +1,3 @@
-import path from 'path'
 import { defineConfig } from 'vitepress'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
@@ -68,11 +67,6 @@ export default defineConfig({
           additionalData: `@use '../src/assets/styles' as *;`
         },
       },
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '../../src'),
-      }
     },
     plugins: [
       Components({
