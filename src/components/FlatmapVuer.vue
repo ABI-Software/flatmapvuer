@@ -438,7 +438,7 @@ Please use `const` to assign meaningful names to them...
         ref="backgroundPopover"
         :virtual-ref="backgroundIconRef"
         placement="top-start"
-        width="320"
+        width="330"
         :teleported="false"
         trigger="click"
         popper-class="background-popper h-auto"
@@ -465,13 +465,14 @@ Please use `const` to assign meaningful names to them...
             </el-row>
           </el-row>
           <template v-if="viewingMode === 'Annotation' && userInformation">
+            <el-row class="backgroundSpacer"></el-row>
             <el-row class="backgroundText">Drawn By*</el-row>
             <el-row class="backgroundControl">
               <el-select
                 :teleported="false"
                 v-model="drawnType"
                 placeholder="Select"
-                class="select-box"
+                class="select-box annotationSelector"
                 popper-class="flatmap_dropdown"
                 @change="setDrawnType"
               >
@@ -487,13 +488,14 @@ Please use `const` to assign meaningful names to them...
                 </el-option>
               </el-select>
             </el-row>
+            <el-row class="backgroundSpacer"></el-row>
             <el-row class="backgroundText">Annotated By*</el-row>
             <el-row class="backgroundControl">
               <el-select
                 :teleported="false"
                 v-model="annotatedType"
                 placeholder="Select"
-                class="select-box"
+                class="select-box annotationSelector"
                 popper-class="flatmap_dropdown"
                 @change="setAnnotatedType"
               >
@@ -510,18 +512,59 @@ Please use `const` to assign meaningful names to them...
               </el-select>
             </el-row>
           </template>
-          <el-row class="backgroundSpacer" v-if="displayFlightPathOption"></el-row>
-          <el-row class="backgroundText" v-if="displayFlightPathOption">Flight path display</el-row>
-          <el-row class="backgroundControl" v-if="displayFlightPathOption">
-            <el-radio-group
-              v-model="flightPath3DRadio"
-              class="flatmap-radio"
-              @change="setFlightPath3D"
-            >
-            <el-radio :label="false">2D</el-radio>
-            <el-radio :label="true">3D</el-radio>
-            </el-radio-group>
-          </el-row>
+          <template v-if="viewingMode === 'Exploration' && !isFC && sparcAPI">
+            <el-row class="backgroundSpacer"></el-row>
+            <el-row class="backgroundText">Markers display</el-row>
+            <el-row class="backgroundControl">
+              <el-col :span="14">
+                <el-radio-group
+                  v-model="imageRadio"
+                  class="flatmap-radio"
+                  :disabled="imagesDownloading"
+                  @change="setImage"
+                >
+                  <el-radio :label="false">Standard</el-radio>
+                  <el-radio :label="true">Image</el-radio>
+                </el-radio-group>
+              </el-col>
+              <el-col :span="10" v-if="imageRadio">
+                <el-select
+                  :teleported="false"
+                  v-model="imageType"
+                  placeholder="Select"
+                  class="select-box imageSelector"
+                  popper-class="flatmap_dropdown"
+                  :disabled="imagesDownloading"
+                  @change="setImageType"
+                >
+                  <el-option
+                    v-for="item in imageTypes"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                  >
+                    <el-row>
+                      <el-col :span="12">{{ item }}</el-col>
+                    </el-row>
+                  </el-option>
+                </el-select>
+              </el-col>
+            </el-row>
+          </template>
+          <template v-if="displayFlightPathOption">
+            <el-row class="backgroundSpacer"></el-row>
+            <el-row class="backgroundText">Flight path display</el-row>
+            <el-row class="backgroundControl">
+              <el-radio-group
+                v-model="flightPath3DRadio"
+                class="flatmap-radio"
+                @change="setFlightPath3D"
+              >
+              <el-radio :label="false">2D</el-radio>
+              <el-radio :label="true">3D</el-radio>
+              </el-radio-group>
+            </el-row>
+          </template>
           <el-row class="backgroundSpacer"></el-row>
           <el-row class="backgroundText">Organs display</el-row>
           <el-row class="backgroundControl">
@@ -622,9 +665,10 @@ Please use `const` to assign meaningful names to them...
         ref="tooltip"
         class="tooltip"
         v-show="tooltipDisplay"
+        :tooltipType="tooltipType"
+        :provenanceEntry="provenanceEntry"
         :annotationEntry="annotationEntry"
-        :tooltipEntry="tooltipEntry"
-        :annotationDisplay="viewingMode === 'Annotation'"
+        :imageEntry="imageEntry"
         @annotation="commitAnnotationEvent"
       />
     </div>
@@ -663,10 +707,18 @@ import yellowstar from '../icons/yellowstar'
 import ResizeSensor from 'css-element-queries/src/ResizeSensor'
 import * as flatmap from '@abi-software/flatmap-viewer'
 import { AnnotationService } from '@abi-software/sparc-annotation'
-import { mapState } from 'pinia'
-import { useMainStore } from '@/store/index'
+import { mapState, mapStores } from 'pinia'
+import { useMainStore } from '@/stores/index'
+import { useSettingsStore } from '@/stores/settings'
 import { DrawToolbar, Tooltip, TreeControls } from '@abi-software/map-utilities'
 import '@abi-software/map-utilities/dist/style.css'
+import {
+  getBiolucidaThumbnails,
+  getSegmentationThumbnails,
+  getScaffoldThumbnails,
+  getPlotThumbnails
+} from '../services/scicrunchQueries'
+import imageMixin from '../mixins/imageMixin'
 
 const centroid = (geometry) => {
   let featureGeometry = { lng: 0, lat: 0, }
@@ -755,6 +807,7 @@ const createUnfilledTooltipData = function () {
  */
 export default {
   name: 'FlatmapVuer',
+  mixins:[imageMixin],
   components: {
     Button,
     Col,
@@ -787,6 +840,71 @@ export default {
     return { annotator }
   },
   methods: {
+    /**
+     * @vuese
+     * Function to add image thumbnails to the map.
+     */
+    populateImageThumbnails: async function (type) {
+      if (this.mapImp) {
+        this.closeTooltip()
+        this.mapImp.clearMarkers();
+        const identifiers = this.mapImp.anatomicalIdentifiers
+        const imageThumbnails = this.settingsStore.getImageThumbnails(type, identifiers)
+        this.populateMapWithImages(this.mapImp, imageThumbnails, type)
+      }
+    },
+    /**
+     * @vuese
+     * Function to fetching image thumbnails.
+     */
+    fetchImageThumbnails: async function (type) {
+      let thumbnails = {}
+      const organCuries = this.settingsStore.organCuries
+      if (type === 'Image') {
+        thumbnails = await getBiolucidaThumbnails(this.sparcAPI, organCuries, type)
+      } else if (type === 'Segmentation') {
+        thumbnails = await getSegmentationThumbnails(this.sparcAPI, organCuries, type)
+      } else if (type === 'Scaffold') {
+        thumbnails = await getScaffoldThumbnails(this.sparcAPI, organCuries, type)
+      } else if (type === 'Plot') {
+        thumbnails = await getPlotThumbnails(this.sparcAPI, organCuries, type)
+      }
+      this.settingsStore.updateImageThumbnails(type, thumbnails)
+    },
+    /**
+     * @vuese
+     * Function to switch the type of displayed image.
+     * @arg type
+     */
+    setImageType: async function (type) {
+      this.imageType = type
+      if (this.mapImp) {
+        this.imagesDownloading = true;
+        if (!this.settingsStore.imageTypeCached(type)) {
+          this.loading = true
+          await this.fetchImageThumbnails(type)
+          this.loading = false
+        }
+        this.populateImageThumbnails(type)
+      }
+    },
+    /**
+     * @vuese
+     * Function to switch show or hide images.
+     * @arg flag
+     */
+    setImage: function (flag) {
+      this.imageRadio = flag
+      if (this.mapImp) {
+        if (flag) {
+          this.setImageType(this.imageType)
+        } else {
+          this.mapImp.clearMarkers();
+          this.closeTooltip();
+        }
+        this.$emit('imageThumbnailDisplay', flag)
+      }
+    },
     /**
      * @vuese
      * Function to initialise drawing.
@@ -1655,6 +1773,7 @@ export default {
               userData: args,
               eventType: eventType,
               provenanceTaxonomy: taxons,
+              markerType: this.imageRadio ? this.imageType : "Standard",
             }
             if (eventType === 'click') {
               this.featuresAlert = data.alert
@@ -1689,7 +1808,6 @@ export default {
             }
             if (
               data &&
-              data.type !== 'marker' &&
               eventType === 'click' &&
               !(this.viewingMode === 'Neuron Connection') &&
               // Disable popup when drawing
@@ -1723,6 +1841,16 @@ export default {
      * @arg data
      */
     checkAndCreatePopups: async function (data) {
+      this.imageEntry = []
+      this.provenanceEntry = {}
+      if (data.feature.type === 'marker' && this.imageRadio) {
+        this.tooltipType = 'image'
+        const imageThumbnails = this.settingsStore.getImageThumbnails(this.imageType, [data.resource[0]])
+        if (data.resource[0] in imageThumbnails) {
+          this.imageEntry = markRaw(imageThumbnails[data.resource[0]])
+        }
+        this.displayTooltip(data.feature.models)
+      } else {
       // Call flatmap database to get the connection data
       if (this.viewingMode === 'Annotation') {
         if (data.feature) {
@@ -1730,6 +1858,7 @@ export default {
             ...data.feature,
             resourceId: this.serverURL,
           }
+          this.tooltipType = 'annotation'
           if (data.feature.featureId && data.feature.models) {
             this.displayTooltip(data.feature.models)
           } else if (data.feature.feature) {
@@ -1763,9 +1892,11 @@ export default {
           results[1] ||
           (data.feature.hyperlinks && data.feature.hyperlinks.length > 0)
         ) {
+          this.tooltipType = 'provenance'
           this.resourceForTooltip = data.resource[0]
           data.resourceForTooltip = this.resourceForTooltip
           this.createTooltipFromNeuronCuration(data)
+          }
         }
       }
     },
@@ -1804,7 +1935,7 @@ export default {
      * @arg data
      */
     createTooltipFromNeuronCuration: async function (data) {
-      this.tooltipEntry = await this.flatmapQueries.createTooltipData(data)
+      this.provenanceEntry = await this.flatmapQueries.createTooltipData(data)
       this.displayTooltip(data.resource[0])
     },
     /**
@@ -2005,7 +2136,7 @@ export default {
         options.annotationFeatureGeometry = geometry
       } else {
         featureId = this.mapImp.modelFeatureIds(feature)[0]
-        if (!this.activeDrawTool) {
+        if (!this.activeDrawTool && !this.imageEntry.length) {
           options.positionAtLastClick = true
         }
       }
@@ -2017,9 +2148,12 @@ export default {
         // const featureIds = [feature];
         // this.moveMap(featureIds);
         if (this.featuresAlert) {
-          this.tooltipEntry['featuresAlert'] = this.featuresAlert;
+          this.provenanceEntry['featuresAlert'] = this.featuresAlert;
         }
-        this.$emit('connectivity-info-open', this.tooltipEntry);
+        this.$emit('connectivity-info-open', this.provenanceEntry);
+      }
+      if (this.imageThumbnailSidebar && this.imageEntry.length && this.viewingMode === 'Exploration') {
+        this.$emit('image-thumbnail-open', this.imageEntry)
       }
       // If UI is not disabled,
       // And connectivityInfoSidebar is not set (default) or set to `false`
@@ -2030,8 +2164,10 @@ export default {
           this.viewingMode === 'Annotation' ||
           (
             this.viewingMode === 'Exploration' &&
-            !this.connectivityInfoSidebar &&
-            this.hasTooltipEntry()
+            (
+              (!this.connectivityInfoSidebar && this.hasTooltipEntry()) ||
+              (!this.imageThumbnailSidebar && this.imageEntry.length)
+            )
           )
         )
       ) {
@@ -2050,7 +2186,7 @@ export default {
         origins,
         provenanceTaxonomy,
         provenanceTaxonomyLabel
-      } = this.tooltipEntry;
+      } = this.provenanceEntry;
 
       return Boolean(
         components?.length ||
@@ -2356,7 +2492,7 @@ export default {
       this.computePathControlsMaximumHeight()
       this.drawerOpen = !this.isCentreLine
       this.mapResize()
-      this.handleMapClick();
+      this.handleMapClick()
       /**
        * This is ``onFlatmapReady`` event.
        * @arg ``this`` (Component Vue Instance)
@@ -2373,7 +2509,8 @@ export default {
 
       if (_map) {
         _map.on('click', (e) => {
-          if (this.tooltipEntry.featureId) {
+          // Tmeporary add imageEntry length
+          if (this.provenanceEntry.featureId || this.imageEntry.length) {
             this.$emit('connectivity-info-close');
           }
         });
@@ -2620,12 +2757,12 @@ export default {
      */
     sparcAPI: {
       type: String,
-      default: 'https://api.sparc.science/',
+      default: '',
     },
     /**
      * Flag to disable UIs on Map
      */
-     disableUI: {
+    disableUI: {
       type: Boolean,
       default: false,
     },
@@ -2636,11 +2773,17 @@ export default {
       type: Boolean,
       default: false,
     },
+    /**
+     * The option to show image thumbnail in sidebar
+     */
+    imageThumbnailSidebar: {
+      type: Boolean,
+      default: false,
+    },
   },
   provide() {
     return {
       flatmapAPI: this.flatmapAPI,
-      sparcAPI: this.sparcAPI,
       $annotator: this.annotator,
       getFeaturesAlert: () => this.featuresAlert,
       userApiKey: this.userToken,
@@ -2659,6 +2802,8 @@ export default {
       serverURL: undefined,
       layers: [],
       pathways: [],
+      imageEntry: markRaw([]),
+      tooltipType: 'provenance',
       sckanDisplay: [
         {
           label: 'Display Path with SCKAN',
@@ -2702,8 +2847,9 @@ export default {
       currentBackground: 'white',
       availableBackground: ['white', 'lightskyblue', 'black'],
       loading: false,
+      imagesDownloading: false,
       flatmapMarker: flatmapMarker,
-      tooltipEntry: createUnfilledTooltipData(),
+      provenanceEntry: createUnfilledTooltipData(),
       connectivityTooltipVisible: false,
       drawerOpen: false,
       featuresAlert: undefined,
@@ -2726,6 +2872,9 @@ export default {
       drawnTypes: ['All tools', 'Point', 'LineString', 'Polygon', 'None'],
       annotatedType: 'Anyone',
       annotatedTypes: ['Anyone', 'Me', 'Others'],
+      imageRadio: false,
+      imageType: 'Image',
+      imageTypes: ['Image', 'Segmentation', 'Scaffold', 'Plot'],
       openMapRef: undefined,
       backgroundIconRef: undefined,
       toolbarOptions: [
@@ -2763,11 +2912,12 @@ export default {
           with: true,
           without: true,
         }
-      })
+      }),
     }
   },
   computed: {
     ...mapState(useMainStore, ['userToken']),
+    ...mapStores(useSettingsStore),
     isValidDrawnCreated: function () {
       return Object.keys(this.drawnCreatedEvent).length > 0
     },
@@ -3609,7 +3759,12 @@ export default {
   background-color: var(--white);
   font-weight: 500;
   color: rgb(48, 49, 51);
-  width: 150px!important;
+  &.annotationSelector {
+    width: 150px!important;
+  }
+  &.imageSelector {
+    width: 125px!important;
+  }
 }
 
 :deep(.flatmap_dropdown) {

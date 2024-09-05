@@ -1,6 +1,6 @@
 {
   "name": "@abi-software/flatmapvuer",
-  "version": "1.4.3",
+  "version": "1.4.1-beta.5",
   "license": "Apache-2.0",
   "files": [
     "dist/*",
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@abi-software/flatmap-viewer": "3.1.7",
-    "@abi-software/map-utilities": "1.1.0",
+    "@abi-software/map-utilities": "^1.1.0-beta.2",
     "@abi-software/sparc-annotation": "0.3.1",
     "@abi-software/svg-sprite": "1.0.0",
     "@element-plus/icons-vue": "^2.3.1",
@@ -59,7 +59,7 @@
     "@cypress/webpack-dev-server": "^3.6.1",
     "@vitejs/plugin-vue": "^4.6.2",
     "@vuese/markdown-render": "^2.11.3",
-    "@vuese/parser": "^2.10.3",
+    "@vuese/parser": "^2.9.1",
     "auto-changelog": "^2.4.0",
     "babel-eslint": "^10.1.0",
     "chokidar": "^3.6.0",
@@ -92,5 +92,8 @@
   "browserslist": [
     "> 1%",
     "last 2 versions"
-  ]
+  ],
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.21.1"
+  }
 }

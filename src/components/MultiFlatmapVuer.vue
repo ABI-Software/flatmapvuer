@@ -81,6 +81,9 @@
       style="height: 100%"
       :flatmapAPI="flatmapAPI"
       :sparcAPI="sparcAPI"
+      @imageThumbnailDisplay="onImageThumbnailDisplay"
+      :imageThumbnailSidebar="imageThumbnailSidebar"
+      @image-thumbnail-open="onImageThumbnailOpen"
     />
   </div>
 </template>
@@ -263,6 +266,12 @@ export default {
     },
     onConnectivityInfoOpen: function (entryData) {
       this.$emit('connectivity-info-open', entryData);
+    },
+    onImageThumbnailDisplay: function (payload) {
+      this.$emit('imageThumbnailDisplay', payload);
+    },
+    onImageThumbnailOpen: function (payload) {
+      this.$emit('image-thumbnail-open', payload);
     },
     onSelectionsDataChanged: function (data) {
       this.$emit('pathway-selection-changed', data);
@@ -700,7 +709,7 @@ export default {
      */
     sparcAPI: {
       type: String,
-      default: 'https://api.sparc.science/',
+      default: '',
     },
     /**
      * Flag to disable UIs on Map
@@ -713,6 +722,13 @@ export default {
      * The option to show connectivity information in sidebar
      */
     connectivityInfoSidebar: {
+      type: Boolean,
+      default: false,
+    },
+    /**
+     * The option to show image thumbnail in sidebar
+     */
+    imageThumbnailSidebar: {
       type: Boolean,
       default: false,
     },

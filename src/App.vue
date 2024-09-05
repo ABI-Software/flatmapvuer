@@ -77,6 +77,7 @@
       :displayMinimap="true"
       :enableOpenMapUI="true"
       :flatmapAPI="flatmapAPI"
+      :sparcAPI="sparcAPI"
       :disableUI="disableUI"
       @open-pubmed-url="onOpenPubmedUrl"
       @pathway-selection-changed="onPathwaySelectionChanged"
@@ -109,6 +110,9 @@ import './icons/mapicon-species-style.css'
 import MultiFlatmapVuer from './components/MultiFlatmapVuer.vue'
 import { HelpModeDialog } from '@abi-software/map-utilities'
 import '@abi-software/map-utilities/dist/style.css'
+import { mapStores } from 'pinia';
+import { useSettingsStore } from './stores/settings';
+import { getOrganCuries } from './services/scicrunchQueries'
 
 export default {
   name: 'app',
@@ -145,6 +149,7 @@ export default {
       if (this.consoleOn) console.log(component)
       let taxon = component.mapImp.describes
       let id = component.mapImp.addMarker('UBERON:0000948')
+
       window.flatmapImp = component.mapImp
       component.enablePanZoomEvents(true)
       //component.showPathwaysDrawer(false);
@@ -285,6 +290,7 @@ export default {
       useHelpModeDialog: true,
       multiflatmapRef: null,
       mapSettings: [],
+      sparcAPI: import.meta.env.VITE_SPARC_API,
       //flatmapAPI: "https://mapcore-demo.org/current/flatmap/v2/"
       //flatmapAPI: "https://mapcore-demo.org/devel/flatmap/v3/"
       flatmapAPI: "https://mapcore-demo.org/current/flatmap/v3/",
@@ -293,11 +299,17 @@ export default {
       //flatmapAPI: "https://mapcore-demo.org/fccb/flatmap/"
       //flatmapAPI: "https://mapcore-demo.org/staging/flatmap/v1/"
       // flatmapAPI: "https://mapcore-demo.org/devel/flatmap/v1/",
-      ElIconSetting: shallowRef(ElIconSetting)
+      ElIconSetting: shallowRef(ElIconSetting),
     }
   },
   mounted: function () {
     this.multiflatmapRef = this.$refs.multi;
+    if (this.sparcAPI) {
+      getOrganCuries(this.sparcAPI).then((organCuries) => this.settingsStore.updateOrganCuries(organCuries))
+    }
+  },
+  computed: {
+    ...mapStores(useSettingsStore),
   },
   watch: {
     helpMode: function (newVal) {
