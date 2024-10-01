@@ -389,12 +389,14 @@ Please use `const` to assign meaningful names to them...
                 key="taxonSelection"
               />
               <selections-group
-                v-if="!(isCentreLine || isFC)  && centreLines && centreLines.length > 0"
+                v-if="!(isCentreLine || isFC) && (centreLines && centreLines.length > 0 || nerves && nerves.length > 0)"
                 title="Nerves"
                 labelKey="label"
                 identifierKey="key"
                 :selections="centreLines"
-                @changed="centreLinesSelected"
+                :options="nerves"
+                @changed="nervesSelected"
+                @checkboxMouseEnter="nerveMouseEnterEmitted"
                 @selections-data-changed="onSelectionsDataChanged"
                 ref="centrelinesSelection"
                 key="centrelinesSelection"
@@ -1186,6 +1188,37 @@ export default {
     },
     /**
      * @vuese
+     * Function to process nerves information and turn store it in the
+     * nerves array.
+     */
+    processNerves: function (nerves) {
+      this.nerves.length = 0
+      if (nerves && nerves.length > 0) {
+        const uniques = {};
+        nerves.forEach((nerve) => {
+          if (nerve.label) {
+            if (!(nerve.label in uniques)) {
+              uniques[nerve.label] = []
+            }
+            uniques[nerve.label].push({
+              id: nerve.id,
+              models: nerve.models,
+            })
+          }
+        })
+        for (const [key, value] of Object.entries(uniques)) {
+          this.nerves.push({
+            value: key,
+            key: value.map(v => v.id),
+            label: key.charAt(0).toUpperCase() + key.slice(1),
+            enabled: false,
+            model: [...new Set(value.map(v => v.models))],
+          })
+        }
+      }
+    },
+    /**
+     * @vuese
      * Function to show or hide the display of the bottom-left drawer container.
      */
     toggleDrawer: function () {
@@ -1260,16 +1293,46 @@ export default {
         this.mapImp.zoomOut()
       }
     },
+    nerveMouseEnterEmitted: function (payload) {
+      if (this.mapImp) {
+        this.nerves.forEach((nerve) => {
+          if (nerve.value === payload.key) {
+            nerve.key.forEach((key) => {
+              this.mapImp.enableNeuronPathsByNerve(key, payload.value)
+            })
+            if (payload.value) {
+              nerve.model.forEach((model) => {
+                const gid = this.mapImp.modelFeatureIds(model)
+                this.mapImp.zoomToGeoJSONFeatures(gid, { noZoomIn: true })
+              })
+            } else {
+              this.mapImp.unselectGeoJSONFeatures()
+            }
+          }
+        })
+      }
+    },
     /**
      * @vuese
      * Function to show or hide centrelines and nodes.
-     * The parameter ``payload`` is an object with a boolean property, ``value``,
-     * ``payload.value = true/false``.
+     * The parameter ``payload`` is an object/a list of objects with properties, ``key``, ``value``,
      * @arg payload
      */
-    centreLinesSelected: function (payload) {
+    nervesSelected: function (payload) {
       if (this.mapImp) {
-        this.mapImp.enableCentrelines(payload.value)
+        if (payload.key === 'centrelines') {
+          this.mapImp.enableCentrelines(payload.value)
+        } else {
+          this.nerves.forEach((nerve) => {
+            payload.forEach((item) => {
+              if (nerve.value === item.key) {
+                nerve.key.forEach((key) => {
+                  this.mapImp.enableNeuronPathsByNerve(key, item.value)
+                })
+              }
+            })
+          })
+        }
       }
     },
     onSelectionsDataChanged: function (data) {
@@ -2337,7 +2400,6 @@ export default {
     onFlatmapReady: function () {
       // onFlatmapReady is used for functions that need to run immediately after the flatmap is loaded
       this.sensor = markRaw(new ResizeSensor(this.$refs.display, this.mapResize))
-      console.log(this.mapImp.options)
       if (this.mapImp.options?.style === 'functional') {
         this.isFC = true
       } else if (this.mapImp.options?.style === 'centreline') {
@@ -2353,6 +2415,7 @@ export default {
       //this.layers = this.mapImp.getLayers();
       this.processSystems(this.mapImp.getSystems())
       this.processTaxon(this.flatmapAPI, this.mapImp.taxonIdentifiers)
+      this.processNerves(this.mapImp.getNerveDetails())
       this.containsAlert = "alert" in this.mapImp.featureFilterRanges()
       this.addResizeButtonToMinimap()
       this.loading = false
@@ -2677,6 +2740,7 @@ export default {
       ],
       systems: [],
       taxonConnectivity: [],
+      nerves: [],
       pathwaysMaxHeight: 1000,
       tooltipWait: markRaw([]),
       hoverVisibilities: [
