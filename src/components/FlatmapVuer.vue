@@ -658,7 +658,7 @@ import {
 import flatmapMarker from '../icons/flatmap-marker'
 import {
   FlatmapQueries,
-  findTaxonomyLabel,
+  findTaxonomyLabels,
 } from '../services/flatmapQueries.js'
 import yellowstar from '../icons/yellowstar'
 import ResizeSensor from 'css-element-queries/src/ResizeSensor'
@@ -1179,12 +1179,13 @@ export default {
      */
     processTaxon: function (flatmapAPI, taxonIdentifiers) {
       this.taxonConnectivity.length = 0
-      taxonIdentifiers.forEach((taxon) => {
-        findTaxonomyLabel(flatmapAPI, taxon).then((value) => {
-          const item = { taxon, label: value }
-          this.taxonConnectivity.push(item)
-        })
-      })
+      findTaxonomyLabels(this.mapImp, taxonIdentifiers).then((entityLabels) => {
+        if (entityLabels.length) {
+          entityLabels.forEach((entityLabel) => {
+            this.taxonConnectivity.push(entityLabel);
+          });
+        }
+      });
     },
     /**
      * @public
@@ -1270,7 +1271,7 @@ export default {
      * @arg {Object} `payload`
      */
     centreLinesSelected: function (payload) {
-      if (this.mapImp) {
+      if (this.mapImp && this.mapImp.enableCentrelines) {
         this.mapImp.enableCentrelines(payload.value)
       }
     },
@@ -1314,7 +1315,7 @@ export default {
         let pathFeatures = paths.map((p) => this.mapImp.featureProperties(p))
 
         // Query the flatmap knowledge graph for connectivity, we use this to grab the origins
-        let connectivity = await this.flatmapQueries.queryForConnectivity(payload)
+        let connectivity = await this.flatmapQueries.queryForConnectivityNew(this.mapImp, payload)
 
         // Check and flatten the origins node graph
         let originsFlat = connectivity?.ids?.dendrites?.flat().flat()
@@ -1758,7 +1759,7 @@ export default {
         }
       } else {
         let results =
-          await this.flatmapQueries.retrieveFlatmapKnowledgeForEvent(data)
+          await this.flatmapQueries.retrieveFlatmapKnowledgeForEvent(this.mapImp, data)
         // The line below only creates the tooltip if some data was found on the path
         // result 0 is the connection, result 1 is the pubmed results from flatmap
         if (
@@ -1807,7 +1808,7 @@ export default {
      * @arg {Object} `data`
      */
     createTooltipFromNeuronCuration: async function (data) {
-      this.tooltipEntry = await this.flatmapQueries.createTooltipData(data)
+      this.tooltipEntry = await this.flatmapQueries.createTooltipData(this.mapImp, data)
       this.displayTooltip(data.resource[0])
     },
     /**
@@ -2352,7 +2353,7 @@ export default {
       this.mapImp.setBackgroundOpacity(1)
       this.backgroundChangeCallback(this.currentBackground)
       this.pathways = this.mapImp.pathTypes()
-      if (!this.isCentreLine) {
+      if (!this.isCentreLine && this.mapImp.enableCentrelines) {
         this.mapImp.enableCentrelines(false)
       }
       //Disable layers for now
