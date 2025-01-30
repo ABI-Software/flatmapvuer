@@ -473,18 +473,35 @@ Please use `const` to assign meaningful names to them...
               </el-select>
             </el-row>
           </template>
-          <el-row class="backgroundSpacer" v-if="displayFlightPathOption"></el-row>
-          <el-row class="backgroundText" v-if="displayFlightPathOption">Flight path display</el-row>
-          <el-row class="backgroundControl" v-if="displayFlightPathOption">
-            <el-radio-group
-              v-model="flightPath3DRadio"
-              class="flatmap-radio"
-              @change="setFlightPath3D"
-            >
-            <el-radio :value="false">2D</el-radio>
-            <el-radio :value="true">3D</el-radio>
-            </el-radio-group>
-          </el-row>
+          <div v-if="viewingMode === 'Neuron Connection'">
+            <el-row class="backgroundSpacer"></el-row>
+            <el-row class="backgroundText">Connection path display</el-row>
+            <el-row class="backgroundControl">
+              <el-radio-group
+                v-model="connectionPathRadio"
+                class="flatmap-radio"
+                @change="setConnectionPath"
+              >
+              <el-radio value="origins">Origin</el-radio>
+              <el-radio value="components">Component</el-radio>
+              <el-radio value="destinations">Destination</el-radio>
+              </el-radio-group>
+            </el-row>
+          </div>
+          <div v-else>
+            <el-row class="backgroundSpacer" v-if="displayFlightPathOption"></el-row>
+            <el-row class="backgroundText" v-if="displayFlightPathOption">Flight path display</el-row>
+            <el-row class="backgroundControl" v-if="displayFlightPathOption">
+              <el-radio-group
+                v-model="flightPath3DRadio"
+                class="flatmap-radio"
+                @change="setFlightPath3D"
+              >
+              <el-radio :value="false">2D</el-radio>
+              <el-radio :value="true">3D</el-radio>
+              </el-radio-group>
+            </el-row>
+          </div>
           <el-row class="backgroundSpacer"></el-row>
           <el-row class="backgroundText">Organs display</el-row>
           <el-row class="backgroundControl">
@@ -1045,6 +1062,17 @@ export default {
     },
     /**
      * @public
+     * Function to switch the type of connection path display
+     * @arg {Boolean} `flag`
+     */
+    setConnectionPath: function (flag) {
+      this.connectionPathRadio = flag
+      if (this.mapImp && this.currentActive) {
+        this.highlightConnectedPaths([this.currentActive])
+      }
+    },
+    /**
+     * @public
      * Function to switch from 2D to 3D
      * @arg {Boolean} `flag`
      */
@@ -1263,47 +1291,60 @@ export default {
     /**
      * @public
      * Function to highlight the connected paths
-     * by providing path model identifier, ``pathId``.
-     * @arg {String} `pathId`
+     * by providing path model identifier, ``pathId`` or ``anatomicalId``.
+     * @arg {String} `pathId` or `anatomicalId`
      */
-    highlightConnectedPaths: async function (payload) {
+    highlightConnectedPaths: async function (payload, options = {}) {
       if (this.mapImp) {
-        let paths = [...this.mapImp.pathModelNodes(payload)]
-
         // The line below is to get the path features from the geojson ids
-        let pathFeatures = paths.map((p) => this.mapImp.featureProperties(p))
-
-        // Query the flatmap knowledge graph for connectivity, we use this to grab the origins
-        let connectivity = await this.flatmapQueries.queryForConnectivityNew(this.mapImp, payload)
-
-        // Check and flatten the origins node graph
-        let originsFlat = connectivity?.ids?.dendrites?.flat().flat()
-
+        const connectedType = options.type || this.connectionPathRadio
+        const nodeFeatureIds = [...this.mapImp.pathModelNodes(payload)]
+        const pathsOfEntities = await this.mapImp.queryPathsForFeatures(payload)
         let toHighlight = []
         let highlight = false
 
-        // Loop through the path features and check if we have origin nodes
-        pathFeatures.forEach((p) => {
+        if (nodeFeatureIds.length) {
+          let target = options.target || []
+          if (!target.length) {
+            // Query the flatmap knowledge graph for connectivity, we use this to grab the origins
+            const connectivity = await this.flatmapQueries.queryForConnectivityNew(this.mapImp, payload)
+            // Check and flatten the origins node graph
+            const originsFlat = connectivity?.ids?.dendrites?.flat().flat()
+            const componentsFlat = connectivity?.ids?.components?.flat().flat()
+            const destinationsFlat = connectivity?.ids?.axons?.flat().flat()
+            target = connectedType === "origins" ?
+              originsFlat : connectedType === "components" ?
+                componentsFlat : connectedType === "destinations" ?
+                  destinationsFlat : []
+          }
 
-          // Get the nodes from each path feature
-          this.mapImp.nodePathModels(p.featureId).forEach((f) => {
-            highlight = true
-            // s2 here is the second level paths
-            let s2 = this.mapImp.pathModelNodes(f)
-            s2.forEach((s) => {
-              let s2Feature = this.mapImp.featureProperties([s]) // get the feature properties for s2
-              if (originsFlat.includes(s2Feature.models)) {
-                highlight = false // if we have an origin node, we don't want to highlight the path
-                return
-              }
+          // Loop through the node features and check if we have certain nodes
+          nodeFeatureIds.forEach((featureId) => {
+            // Get the paths from each node feature
+            const pathsL2 = this.mapImp.nodePathModels(featureId)
+            pathsL2.forEach((path) => {
+              highlight = true
+              // nodes of the second level path
+              const nodeFeatureIdsL2 = this.mapImp.pathModelNodes(path)
+              const nodeModelsL2 = nodeFeatureIdsL2.map((featureIdL2) => {
+                return this.mapImp.featureProperties(featureIdL2).models
+              })
+              const intersection = target.filter(element => nodeModelsL2.includes(element))
+              if (!intersection.length) highlight = false
+              if (highlight && !toHighlight.includes(path)) toHighlight.push(path)
             })
-
-            if (highlight) {
-              toHighlight.push(f)
-            }
           })
-        })
-
+          toHighlight = [...new Set([...toHighlight, ...payload])]
+        } else if (pathsOfEntities.length) {
+          pathsOfEntities.forEach((path) => {
+            const nodeFeatureIds = this.mapImp.pathModelNodes(path)
+            const nodeModels = nodeFeatureIds.map((featureId) => {
+              return this.mapImp.featureProperties(featureId).models
+            })
+            if (nodeModels.includes(options.target[0])) toHighlight.push(path)
+          })
+          if (!toHighlight.length) toHighlight = options.target
+        }
         // display connected paths
         this.mapImp.zoomToFeatures(toHighlight, { noZoomIn: true })
       }
@@ -1639,10 +1680,10 @@ export default {
               //The following will be used to track either a feature is selected
               this.statesTracking.activeClick = true
               this.statesTracking.activeTerm = data?.models
+              this.currentActive = data.models ? data.models : ''
               if (this.viewingMode === 'Neuron Connection') {
                 this.highlightConnectedPaths([data.models])
               } else {
-                this.currentActive = data.models ? data.models : ''
                 // Drawing connectivity between features
                 if (this.activeDrawTool && !this.isValidDrawnCreated) {
                   // Check if flatmap features or existing drawn features
@@ -1884,8 +1925,7 @@ export default {
         }
       } else {
         //require data.resource && data.feature.source
-        let results =
-          await this.flatmapQueries.retrieveFlatmapKnowledgeForEvent(this.mapImp, data)
+        const results = await this.flatmapQueries.retrieveFlatmapKnowledgeForEvent(this.mapImp, data)
         // The line below only creates the tooltip if some data was found on the path
         // the pubmed URLs are in knowledge response.references
         if (
@@ -1895,6 +1935,8 @@ export default {
           this.resourceForTooltip = data.resource[0]
           data.resourceForTooltip = this.resourceForTooltip
           this.createTooltipFromNeuronCuration(data)
+        } else {
+          this.createTooltipFromEntityCuration(data)
         }
       }
     },
@@ -1936,7 +1978,42 @@ export default {
      */
     createTooltipFromNeuronCuration: async function (data) {
       this.tooltipEntry = await this.flatmapQueries.createTooltipData(this.mapImp, data)
+      this.tooltipEntry.neuronCuration = true
       this.displayTooltip(data.resource[0])
+    },
+    /**
+     * @public
+     * Function to create tooltip from Neuron Curation ``data``.
+     * @arg {Object} `data`
+     */
+    createTooltipFromEntityCuration: async function (data) {
+      this.tooltipEntry = await this.flatmapQueries.createTooltipData(this.mapImp, data)
+      this.tooltipEntry.entityCuration = true
+      let labels = []
+      const pathsOfEntities = await this.mapImp.queryPathsForFeatures(data.resource)
+      if (pathsOfEntities.length) {
+        let componentsWithDatasets = []
+        pathsOfEntities.forEach((path) => {
+          const featureIds = this.mapImp.pathModelNodes(path)
+          featureIds.forEach((id) => {
+            const feature = this.mapImp.featureProperties(id)
+            if (!labels.includes(feature.label)) {
+              labels.push(feature.label)
+              componentsWithDatasets.push({ id: feature.models, name: feature.label })
+            }
+          })
+        })
+        this.tooltipEntry = {
+          ...this.tooltipEntry,
+          origins: [data.label],
+          originsWithDatasets: [{ id: data.resource[0], name: data.label }],
+          components: labels,
+          componentsWithDatasets: componentsWithDatasets,
+          destinations: [],
+          destinationsWithDatasets: [],
+        }
+        this.displayTooltip(data.resource[0])
+      }
     },
     /**
      * @public
@@ -2348,6 +2425,7 @@ export default {
         if (identifier && identifier.uuid) state['uuid'] = identifier.uuid
         state['viewingMode'] = this.viewingMode
         state['searchTerm'] = this.statesTracking.activeTerm
+        state['connectionPath'] = this.connectionPathRadio
         state['flightPath3D'] = this.flightPath3DRadio
         state['colour'] = this.colourRadio
         state['outlinesRadio'] = this.outlinesRadio
@@ -2944,6 +3022,7 @@ export default {
       connectivityTooltipVisible: false,
       drawerOpen: false,
       featuresAlert: undefined,
+      connectionPathRadio: 'origins',
       flightPath3DRadio: false,
       displayFlightPathOption: false,
       colourRadio: true,
