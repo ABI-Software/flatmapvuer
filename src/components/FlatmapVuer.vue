@@ -1470,11 +1470,22 @@ export default {
     },
     taxonMouseEnterEmitted: function (payload) {
       if (this.mapImp) {
+        this.zoomDelay.map((delay) => clearTimeout(delay))
         if (payload.value) {
           clearTimeout(this.taxonLeaveDelay)
-          let gid = this.mapImp.taxonFeatureIds(payload.key)
           this.mapImp.enableConnectivityByTaxonIds(payload.key, payload.value) // make sure path is visible
-          this.mapImp.zoomToGeoJSONFeatures(gid, {noZoomIn: true})
+          const gid = this.mapImp.taxonFeatureIds(payload.key)
+          const chunkSize = 400;
+          let bbox = null
+          for (let i = 0; i < gid.length; i += chunkSize) {
+            const delay = setTimeout(() => {
+              const chunk = gid.slice(i, i + chunkSize);
+              let options = { sequence: false, bbox: bbox }
+              if (i !== 0) options.sequence = true
+              bbox = this.mapImp.zoomToGeoJSONFeatures(chunk, options)
+            }, 0)
+            this.zoomDelay.push(delay)
+          }
         } else {
           this.taxonLeaveDelay = setTimeout(() => {
             // reset visibility of paths
@@ -3007,6 +3018,7 @@ export default {
         activeTerm: "",
       }),
       taxonLeaveDelay: undefined,
+      zoomDelay: []
     }
   },
   computed: {
