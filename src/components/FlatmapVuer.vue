@@ -633,6 +633,9 @@ import {
   refreshFlatmapKnowledgeCache,
   getKnowledgeSource,
   getReferenceConnectivitiesByAPI,
+  filterPathsByOriginFromKnowledge,
+  filterPathsByDestinationFromKnowledge,
+  filterPathsByViaFromKnowledge,
 } from '../services/flatmapKnowledge.js'
 import { capitalise } from './utilities.js'
 import yellowstar from '../icons/yellowstar'
@@ -641,7 +644,19 @@ import * as flatmap from 'https://cdn.jsdelivr.net/npm/@abi-software/flatmap-vie
 import { AnnotationService } from '@abi-software/sparc-annotation'
 import { mapState } from 'pinia'
 import { useMainStore } from '@/store/index'
-import { DrawToolbar, Tooltip, TreeControls } from '@abi-software/map-utilities'
+import {
+  queryPathsByOrigin,
+  queryPathsByViaLocation,
+  queryPathsByDestination,
+  extractOriginItems,
+  extractDestinationItems,
+  extractViaItems,
+  fetchLabels,
+  queryAllConnectedPaths,
+  DrawToolbar,
+  Tooltip,
+  TreeControls
+} from '@abi-software/map-utilities'
 import '@abi-software/map-utilities/dist/style.css'
 import EventBus from './EventBus.js'
 
@@ -741,7 +756,7 @@ export default {
   },
   methods: {
     /**
-     * 
+     *
      * @param filter format should follow #makeStyleFilter (flatmap-viewer)
      */
     setVisibilityFilter: function (filter) {
@@ -1401,8 +1416,8 @@ export default {
           const notPathways = { NOT: isPathways };
 
           if (payload.key === "alert" || payload.key === "withoutAlert") {
-            const hasAlert = payload.key === "alert" ? 
-              { HAS: 'alert' } : 
+            const hasAlert = payload.key === "alert" ?
+              { HAS: 'alert' } :
               { NOT: { HAS: 'alert' } };
 
             filter = { OR: [notPathways, { AND: [isPathways, hasAlert] }] };
@@ -1732,9 +1747,8 @@ export default {
               const clickedItem = singleSelection ? data : data[0]
               this.setConnectivityDataSource(this.viewingMode, clickedItem);
               if (this.viewingMode === 'Neuron Connection') {
-                this.retrieveConnectedPaths([clickedItem.models]).then((paths) => {
-                  this.zoomToFeatures(paths)
-                })
+                // do nothing here
+                // the method to highlight paths is moved to checkAndCreatePopups function
               } else {
                 this.currentActive = clickedItem.models ? clickedItem.models : '' // This is for FC map
                 // This is for annotation mode - draw connectivity between features/paths
@@ -1767,7 +1781,6 @@ export default {
               data &&
               data.type !== 'marker' &&
               eventType === 'click' &&
-              !(this.viewingMode === 'Neuron Connection') &&
               // Disable popup when drawing
               !this.activeDrawTool
             ) {
@@ -1938,6 +1951,14 @@ export default {
       }
       return featureIds;
     },
+    getFlatmapKnowledge: function () {
+      let flatmapKnowledge = [];
+      const flatmapKnowledgeRaw = sessionStorage.getItem('flatmap-knowledge');
+      if (flatmapKnowledgeRaw) {
+        flatmapKnowledge = JSON.parse(flatmapKnowledgeRaw);
+      }
+      return flatmapKnowledge;
+    },
     emitConnectivityError: function (errorData) {
       this.$emit('connectivity-error', {
         data: {
@@ -1973,7 +1994,7 @@ export default {
      * _checkNeuronClicked shows a neuron path pop up if a path was recently clicked._
      * @arg {Object} `data`
      */
-    checkAndCreatePopups: async function (data) {
+    checkAndCreatePopups: async function (data, connectivityExplorerClicked) {
       // Call flatmap database to get the connection data
       if (this.viewingMode === 'Annotation') {
         const features = data.filter(d => d.feature).map(d => d.feature)
@@ -2020,6 +2041,72 @@ export default {
         } else {
           this.annotation = {}
         }
+      }
+      // clicking on a connectivity explorer card will be the same as exploration mode
+      // the card should be opened without doing other functions
+      else if (this.viewingMode === 'Neuron Connection' && !connectivityExplorerClicked) {
+        const resources = data.map(tooltip => tooltip.resource[0]);
+
+        // filter out paths
+        const featureId = resources.find(resource => !resource.startsWith('ilxtr:'));
+        if (featureId) {
+          // fallback if it cannot find in anatomical nodes
+          const transformResources = Array.isArray(resources) ? [...resources] : [resources];
+          if (transformResources.length === 1) {
+            transformResources.push([]);
+          }
+
+          const featureId = data[0].feature?.featureId;
+          const annotation = this.mapImp.annotations.get(featureId);
+          const anatomicalNodes = annotation?.['anatomical-nodes'];
+          let anatomicalNode;
+          let uniqueResource = transformResources;
+          const models = annotation?.['models'];
+          if (anatomicalNodes?.length) {
+            anatomicalNode = anatomicalNodes[anatomicalNodes.length - 1];
+          }
+          if (anatomicalNode) {
+            uniqueResource = JSON.parse(anatomicalNode);
+          } else if (models) {
+            uniqueResource = [models, []];
+          }
+
+          const terms = uniqueResource.flat(Infinity);
+          const uniqueTerms = [...new Set(terms)];
+          const fetchResults = await fetchLabels(this.flatmapAPI, uniqueTerms);
+          const objectResults = fetchResults.reduce((arr, item) => {
+            const id = item[0];
+            const valObj = JSON.parse(item[1]);
+            if (valObj.source === this.mapImp.knowledgeSource) {
+              arr.push({ id, label: valObj.label });
+            }
+            return arr;
+          }, []);
+          const labels = [];
+          for (let i = 0; i < uniqueTerms.length; i++) {
+            const foundObj = objectResults.find((obj) => obj.id === uniqueTerms[i])
+            if (foundObj) {
+              labels.push(foundObj.label);
+            }
+          }
+          const filterItemLabel = capitalise(labels.join(', '));
+          const newConnectivityfilter = {
+            facet: JSON.stringify(uniqueResource),
+            facetPropPath: `flatmap.connectivity.source.${this.connectionType.toLowerCase()}`,
+            tagLabel: filterItemLabel, // used tagLabel here instead of label since the label and value are different
+            term: this.connectionType
+          };
+          // check for existing item
+          const isNewFilterItemExist = this.connectivityfilters.some((connectivityfilter) => (
+            connectivityfilter.facet === newConnectivityfilter.facet &&
+            connectivityfilter.facetPropPath === newConnectivityfilter.facetPropPath
+          ));
+
+          if (!isNewFilterItemExist) {
+            this.connectivityfilters.push(newConnectivityfilter);
+          }
+          this.$emit('neuron-connection-feature-click', this.connectivityfilters);
+        }
       } else {
         // load and store knowledge
         loadAndStoreKnowledge(this.mapImp, this.flatmapQueries);
@@ -2034,6 +2121,7 @@ export default {
         // this should only for flatmap paths not all features
         if (this.tooltipEntry.length) {
           this.$emit('connectivity-info-open', this.tooltipEntry);
+
           // While having placeholders displayed, get details for all paths and then replace.
           for (let index = 0; index < data.length; index++) {
             prom1.push(await this.getKnowledgeTooltip(data[index]))
@@ -2044,6 +2132,31 @@ export default {
             this.displayTooltip(featureIds)
           }
         }
+      }
+    },
+    /**
+     * Updates the connectivity filters in flatmap when there are changes in the sidebar.
+     * @public
+     * @param {Array} payload - The array of filter items to update.
+     */
+    updateConnectivityFilters: function (payload) {
+      if (!payload.length) return;
+      this.connectivityfilters = payload.filter((filterItem) => (
+        filterItem.facet.toLowerCase() !== 'show all'
+      ));
+    },
+    resetConnectivityfilters: function (payload) {
+      if (payload.length) {
+        // remove not found items
+        this.connectivityfilters = this.connectivityfilters.filter((connectivityfilter) =>
+          payload.some((notFoundItem) => (
+            notFoundItem.facetPropPath === connectivityfilter.facetPropPath &&
+            notFoundItem.facet !== connectivityfilter.facet
+          ))
+        )
+      } else {
+        // full reset
+        this.connectivityfilters = [];
       }
     },
     getKnowledgeTooltip: async function (data) {
@@ -2749,9 +2862,9 @@ export default {
       }
       return filterSources
     },
-    getFilterOptions: async function () {
+    getFilterOptions: async function (_flatmapKnowledge) {
+      let filterOptions = [];
       if (this.mapImp) {
-        let filterOptions = []
         const filterRanges = this.mapImp.featureFilterRanges()
         for (const [key, value] of Object.entries(filterRanges)) {
           let main = {
@@ -2804,8 +2917,70 @@ export default {
             filterOptions.push(main)
           }
         }
-        return filterOptions
+        const connectionFilters = [];
+        const flatmapKnowledge = _flatmapKnowledge || this.getFlatmapKnowledge();
+        const mapKnowledge = this.mapImp.pathways.paths;
+        flatmapKnowledge.forEach((knowledge) => {
+          const id = knowledge.id;
+          if (id) {
+            const matchObj = mapKnowledge[id];
+            if (matchObj) {
+              const mapConnectivity = matchObj.connectivity;
+              const mapNodePhenotypes = matchObj['node-phenotypes'];
+              knowledge.connectivity = [...knowledge.connectivity, ...mapConnectivity];
+              for (let key in knowledge['node-phenotypes']) {
+                if (mapNodePhenotypes[key]) {
+                  knowledge['node-phenotypes'][key].push(...mapNodePhenotypes[key]);
+                }
+              }
+            }
+          }
+        })
+        const knowledgeSource = this.mapImp.knowledgeSource;
+        const originItems = await extractOriginItems(this.flatmapAPI, knowledgeSource, flatmapKnowledge);
+        const viaItems = await extractViaItems(this.flatmapAPI, knowledgeSource, flatmapKnowledge);
+        const destinationItems = await extractDestinationItems(this.flatmapAPI, knowledgeSource, flatmapKnowledge);
+
+        const transformItem = (facet, item) => {
+          const key = JSON.stringify(item.key);
+          return {
+            key: `flatmap.connectivity.source.${facet}.${key}`,
+            label: item.label || key
+          };
+        }
+
+        for (const facet of ["origin", "via", "destination"]) {
+          let childrenList = []
+          if (facet === 'origin') {
+            childrenList = originItems.map((item) => transformItem(facet, item));
+          } else if (facet === 'via') {
+            childrenList = viaItems.map((item) => transformItem(facet, item));
+          } else if (facet === 'destination') {
+            childrenList = destinationItems.map((item) => transformItem(facet, item));
+          }
+
+          // Those without label but key should be below
+          childrenList = childrenList.sort((a, b) => {
+            const isAlpha = (str) => /^[a-zA-Z]/.test(str);
+            const aAlpha = isAlpha(a.label);
+            const bAlpha = isAlpha(b.label);
+
+            if (aAlpha && !bAlpha) return -1;
+            if (!aAlpha && bAlpha) return 1;
+
+            return a.label.localeCompare(b.label);
+          });
+
+          connectionFilters.push({
+            key: `flatmap.connectivity.source.${facet}`,
+            label: facet,
+            children: childrenList,
+          })
+        }
+
+        filterOptions.push(...connectionFilters)
       }
+      return filterOptions;
     },
     /**
      * @public
@@ -2882,7 +3057,7 @@ export default {
      * @arg {String} `term`,
      * @arg {String} `displayInfo`
      */
-    searchAndShowResult: function (term, displayInfo) {
+    searchAndShowResult: function (term, displayInfo, connectivityExplorerClicked) {
       if (this.mapImp) {
         if (term === undefined || term === '') {
           this.mapImp.clearSearchResults()
@@ -2913,13 +3088,8 @@ export default {
                   provenanceTaxonomy: feature.taxons,
                   alert: feature.alert,
                 }
-                if (this.viewingMode === "Exploration" || this.viewingMode === "Annotation") {
-                  this.checkAndCreatePopups([data])
-                } else if (this.viewingMode === 'Neuron Connection') {
-                  this.retrieveConnectedPaths(data.resource).then((paths) => {
-                    this.zoomToFeatures(paths)
-                  })
-                }
+                // Show popup for all modes
+                this.checkAndCreatePopups([data], connectivityExplorerClicked)
                 this.mapImp.showPopup(featureId, capitalise(feature.label), {
                   className: 'custom-popup',
                   positionAtLastClick: false,
@@ -2936,6 +3106,21 @@ export default {
     },
     /**
      * @public
+     * Public method to highlight connected paths for neuron connection mode,
+     * to highlight paths for other display maps on spit screen.
+     * @arg {Array} `paths`
+     */
+    highlightConnectedPaths: function (paths) {
+      if (paths.length) {
+        // filter paths for this map
+        const filteredPaths = paths.filter(path => (path in this.mapImp.pathways.paths))
+        // this.zoomToFeatures is replaced with selectGeoJSONFeatures to highlight paths
+        const featureIdsToHighlight = this.mapImp.modelFeatureIdList(filteredPaths);
+        this.mapImp.selectGeoJSONFeatures(featureIdsToHighlight);
+      }
+    },
+    /**
+     * @public
      * Function to show search suggestions
      * from the ``term`` provided.
      * @arg {String} `term`
@@ -2946,6 +3131,9 @@ export default {
     },
     onActionClick: function (data) {
       EventBus.emit('onActionClick', data)
+    },
+    setConnectionType: function (type) {
+      this.connectionType = type;
     },
   },
   props: {
@@ -3246,6 +3434,7 @@ export default {
         'Neuron Connection': 'Discover Neuron connections by selecting a neuron and viewing its associated network connections',
         'Annotation': ['View feature annotations', 'Add, comment on and view feature annotations']
       },
+      connectionType: 'All',
       offlineAnnotationEnabled: false,
       offlineAnnotations: [],
       annotationFrom: 'Anyone',
@@ -3292,6 +3481,7 @@ export default {
       }),
       searchTerm: "",
       taxonLeaveDelay: undefined,
+      connectivityfilters: [],
     }
   },
   computed: {
