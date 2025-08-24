@@ -260,39 +260,35 @@ Please use `const` to assign meaningful names to them...
               :style="{ 'max-height': pathwaysMaxHeight + 'px' }"
               v-popover:checkBoxPopover
             >
-              <!-- <svg-legends v-if="!isFC" class="svg-legends-container" /> -->
-              <dynamic-legends
-                v-if="!isFC"
-                identifierKey="prompt"
-                colourKey="colour"
-                styleKey="style"
-                :legends="flatmapLegends"
-                :showStarInLegend="showStarInLegend"
-                class="svg-legends-container"
-              />
-              <!-- <template v-if="showStarInLegend">
-                <el-popover
-                  content="Location of the featured dataset"
-                  placement="right"
-                  :teleported="true"
-                  trigger="manual"
-                  width="max-content"
-                  :offset="-10"
-                  popper-class="flatmap-popper flatmap-teleport-popper"
-                  :visible="hoverVisibilities[9].value"
-                  ref="featuredMarkerPopover"
-                >
-                  <template #reference>
-                    <div
-                      v-popover:featuredMarkerPopover
-                      class="yellow-star-legend"
-                      v-html="yellowstar"
-                      @mouseover="showTooltip(9)"
-                      @mouseout="hideTooltip(9)"
-                    ></div>
-                  </template>
-                </el-popover>
-              </template> -->
+              <el-popover
+                content="Location of the featured dataset"
+                placement="bottom"
+                :teleported="true"
+                trigger="manual"
+                width="max-content"
+                :offset="-10"
+                popper-class="flatmap-popper flatmap-teleport-popper"
+                :visible="hoverVisibilities[9].value && showStarInLegend"
+                ref="featuredMarkerPopover"
+              >
+                <template #reference>
+                  <div
+                    v-popover:featuredMarkerPopover
+                    @mouseover="showTooltip(9)"
+                    @mouseout="hideTooltip(9)"
+                  >
+                    <dynamic-legends
+                      v-if="!isFC"
+                      identifierKey="prompt"
+                      colourKey="colour"
+                      styleKey="style"
+                      :legends="legendEntry"
+                      :showStarInLegend="true"
+                      class="svg-legends-container"
+                    />
+                  </div>
+                </template>
+              </el-popover>
               <!-- The line below places the yellowstar svg on the left, and the text "Featured markers on the right" with css so they are both centered in the div -->
               <el-popover
                 content="Find these markers for data. The number inside the markers is the number of datasets available for each marker."
@@ -3283,6 +3279,13 @@ export default {
       type: Boolean,
       default: true,
     },
+    /**
+     * Allow to add and display extra legends to drawer
+     */
+    externalLegends: {
+      type: Array,
+      default: [],
+    },
   },
   provide() {
     return {
@@ -3447,6 +3450,9 @@ export default {
       }
       return description
     },
+    legendEntry: function () {
+      return [...this.flatmapLegends, ...this.externalLegends]
+    }
   },
   watch: {
     entry: function () {
@@ -3651,14 +3657,6 @@ export default {
   &.close {
     transform: translateX(-100%);
   }
-}
-
-.svg-legends-container {
-  width: 70%;
-  min-width:183px;
-  height: auto;
-  position: relative;
-  max-height: 140px;
 }
 
 .pathway-container {
