@@ -1266,6 +1266,11 @@ export default {
         if (this.$refs.pathwaysSelection) {
           this.$refs.pathwaysSelection.reset()
         }
+
+        this.trackEvent({
+          'event_name': `portal_maps_zoom`,
+          'category': 'reset',
+        });
       }
     },
     /**
@@ -1276,6 +1281,11 @@ export default {
     zoomIn: function () {
       if (this.mapImp) {
         this.mapImp.zoomIn()
+
+        this.trackEvent({
+          'event_name': `portal_maps_zoom`,
+          'category': 'zoom_in',
+        });
       }
     },
     /**
@@ -1286,6 +1296,11 @@ export default {
     zoomOut: function () {
       if (this.mapImp) {
         this.mapImp.zoomOut()
+
+        this.trackEvent({
+          'event_name': `portal_maps_zoom`,
+          'category': 'zoom_out',
+        });
       }
     },
     onSelectionsDataChanged: function (data) {
@@ -3056,6 +3071,19 @@ export default {
     },
     setConnectionType: function (type) {
       this.connectionType = type;
+    },
+    /**
+     * @public
+     * Function to track events.
+     * @arg {Object} `data`
+     */
+    trackEvent: function (data) {
+      const taggingData = {
+        'event': 'interaction_event',
+        'location': 'flatmap',
+        ...data,
+      };
+      this.$emit('trackEvent', taggingData);
     },
   },
   props: {
