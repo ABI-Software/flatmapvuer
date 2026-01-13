@@ -106,6 +106,7 @@
 import { markRaw } from 'vue'
 import EventBus from './EventBus'
 import FlatmapVuer from './FlatmapVuer.vue'
+import FlatmapError from './FlatmapError.vue'
 import flatmap from '../services/flatmapLoader.js'
 import {
   ElCol as Col,
@@ -135,6 +136,7 @@ export default {
     Select,
     Popover,
     FlatmapVuer,
+    FlatmapError,
   },
   created: function () {
     this.loadMapManager();
