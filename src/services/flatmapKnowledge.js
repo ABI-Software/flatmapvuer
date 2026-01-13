@@ -141,6 +141,7 @@ export {
   getReferenceConnectivitiesFromStorage,
   getReferenceConnectivitiesByAPI,
   loadAndStoreKnowledge,
+  getFlatmapKnowledge,
   getKnowledgeSource,
   getKnowledgeSourceFromProvenance,
   refreshFlatmapKnowledgeCache,
