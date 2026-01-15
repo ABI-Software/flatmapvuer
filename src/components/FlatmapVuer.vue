@@ -2158,18 +2158,7 @@ export default {
           });
         } else {
           // clicking on paths
-          const searchTerms = resources.join();
-
-          // for neuron connection mode "all"
-          if (this.connectionType.toLowerCase() === 'all') {
-            this.$emit('neuron-connection-feature-click', {
-              filters: [],
-              search: searchTerms,
-            });
-          } else {
-            // for neuron connection mode "origin", "via" and "destination"
-            await this.openConnectivityInfo(data);
-          }
+          await this.openConnectivityInfo(data);
         }
       } else {
         await this.openConnectivityInfo(data);
