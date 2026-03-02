@@ -1958,7 +1958,9 @@ export default {
         }
 
         // Emit error message for connectivity
-        this.emitConnectivityError(errorData);
+        if (errorData.length) {
+          this.emitConnectivityError(errorData);
+        }
 
         // highlight all available features
         const connectivityFeatures = featuresToHighlight.reduce((arr, path) => {

@@ -1,4 +1,6 @@
 /* eslint-disable no-alert, no-console */
+import { querySingleConnectivityList } from '@abi-software/map-utilities';
+
 // remove duplicates by stringifying the objects
 const removeDuplicates = function (arrayOfAnything) {
   if (!arrayOfAnything) return []
@@ -99,6 +101,14 @@ let FlatmapQueries = function () {
     this.destinations = []
     this.origins = []
     this.components = []
+    this.destinationsWithDatasets = []
+    this.originsWithDatasets = []
+    this.componentsWithDatasets = []
+    this.destinationsCombinations = []
+    this.originsCombinations = []
+    this.componentsCombinations = []
+    this.singleConnectivityList = []
+    this.hasSingleConnectivityList = false
     this.rawURLs = []
     this.controller = undefined
     this.uberons = []
@@ -140,6 +150,10 @@ let FlatmapQueries = function () {
       destinationsWithDatasets: this.destinationsWithDatasets,
       originsWithDatasets: this.originsWithDatasets,
       componentsWithDatasets: this.componentsWithDatasets,
+      destinationsCombinations: this.destinationsCombinations,
+      originsCombinations: this.originsCombinations,
+      componentsCombinations: this.componentsCombinations,
+      hasSingleConnectivityList: this.singleConnectivityList.length > 0,
       title: eventData.label,
       featureId: eventData.resource,
       hyperlinks: hyperlinks,
@@ -160,6 +174,9 @@ let FlatmapQueries = function () {
       componentsWithDatasets: this.componentsWithDatasets,
       destinations: this.destinations,
       destinationsWithDatasets: this.destinationsWithDatasets,
+      destinationsCombinations: this.destinationsCombinations,
+      originsCombinations: this.originsCombinations,
+      componentsCombinations: this.componentsCombinations,
       connectivitySource: this.connectivitySource,
       noMapConnectivity: this.noMapConnectivity,
     };
@@ -285,16 +302,33 @@ let FlatmapQueries = function () {
     this.destinations = []
     this.origins = []
     this.components = []
+    this.destinationsWithDatasets = []
+    this.originsWithDatasets = []
+    this.componentsWithDatasets = []
+    this.destinationsCombinations = []
+    this.originsCombinations = []
+    this.componentsCombinations = []
+    this.singleConnectivityList = []
     this.rawURLs = []
     if (!keastIds || keastIds.length === 0 || !keastIds[0]) return
 
-    let prom1 = this.queryForConnectivityNew(mapImp, keastIds[0]) // This on returns a promise so dont need 'await'
+    let prom1 = await this.queryForConnectivityNew(mapImp, keastIds[0]) // This on returns a promise so dont need 'await'
     let results = await Promise.all([prom1])
     return results
   }
 
-  this.queryForConnectivityNew = function (mapImp, keastId, connectivitySource = 'map', processConnectivity = true) {
-    this.connectivitySource = connectivitySource
+  this.queryForConnectivityNew = async function (mapImp, keastId, connectivitySource = 'map', processConnectivity = true) {
+    // TODO: Temporary for testing
+    const newService = mapImp.id === 'human-flatmap_female';
+    const tempMapUUID = 'e35298a5-ca44-5882-974f-874a1c393cad';
+    const tempFlatmapAPI = 'https://napakalas-flatmap-demo.hf.space/';
+    connectivitySource = newService ? 'sckan' : connectivitySource;
+    this.connectivitySource = newService ? 'sckan' : connectivitySource;
+
+    if (newService) {
+      this.singleConnectivityList = await querySingleConnectivityList(tempFlatmapAPI, tempMapUUID, keastId);
+    }
+
     return new Promise((resolve) => {
       const queryAPI = connectivitySource === 'map'
         ? this.queryMapConnectivity(mapImp.mapMetadata.uuid, keastId)
@@ -485,6 +519,66 @@ let FlatmapQueries = function () {
     this.destinationsWithDatasets = this.uberons.filter(
       (ub) => axonsFlat.indexOf(ub.id) !== -1
     ).sort(compareNames);
+
+    // Get combinations of SCKAN and Map
+    if (this.singleConnectivityList.length > 0) {
+      this.singleConnectivityList.forEach((value) => {
+        const { sckanNodeId, sckanNodeLabel, mapNodeId, mapNodeLabel } = value;
+
+        // The base ID is SCKAN ID
+        if (axons.find(axon => JSON.stringify(axon) === JSON.stringify(sckanNodeId))) {
+          this.destinationsCombinations.push({
+            sckanId: sckanNodeId,
+            sckanLabel: sckanNodeLabel,
+            mapId: mapNodeId,
+            mapLabel: mapNodeLabel,
+          })
+          mapNodeId.forEach((id, i) => {
+            const stringId = typeof id === 'string' ? id : id[0];
+            if (stringId) {
+              this.destinationsWithDatasets.push({
+                id: stringId,
+                name: mapNodeLabel.split(',')[i]
+              });
+            }
+          });
+        }
+        if (dendrites.find(dendrite => JSON.stringify(dendrite) === JSON.stringify(sckanNodeId))) {
+          this.originsCombinations.push({
+            sckanId: sckanNodeId,
+            sckanLabel: sckanNodeLabel,
+            mapId: mapNodeId,
+            mapLabel: mapNodeLabel,
+          })
+          mapNodeId.forEach((id, i) => {
+            const stringId = typeof id === 'string' ? id : id[0];
+            if (stringId) {
+              this.originsWithDatasets.push({
+                id: stringId,
+                name: mapNodeLabel.split(',')[i]
+              });
+            }
+          });
+        }
+        if (components.find(component => JSON.stringify(component) === JSON.stringify(sckanNodeId))) {
+          this.componentsCombinations.push({
+            sckanId: sckanNodeId,
+            sckanLabel: sckanNodeLabel,
+            mapId: mapNodeId,
+            mapLabel: mapNodeLabel,
+          })
+          mapNodeId.forEach((id, i) => {
+            const stringId = typeof id === 'string' ? id : id[0];
+            if (stringId) {
+              this.componentsWithDatasets.push({
+                id: stringId,
+                name: mapNodeLabel.split(',')[i]
+              });
+            }
+          });
+        }
+      });
+    }
   }
 
   this.processConnectivity = function (mapImp, connectivity) {
