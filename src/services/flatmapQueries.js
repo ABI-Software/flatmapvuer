@@ -318,15 +318,18 @@ let FlatmapQueries = function () {
   }
 
   this.queryForConnectivityNew = async function (mapImp, keastId, connectivitySource = 'map', processConnectivity = true) {
-    // TODO: Temporary for testing
-    const newService = mapImp.id === 'human-flatmap_female';
-    const tempMapUUID = 'e35298a5-ca44-5882-974f-874a1c393cad';
-    const tempFlatmapAPI = 'https://napakalas-flatmap-demo.hf.space/';
-    connectivitySource = newService ? 'sckan' : connectivitySource;
-    this.connectivitySource = newService ? 'sckan' : connectivitySource;
+    // The new service, CQ27, is available for SCKAN knowledge sources from 2026 onward.
+    const sourceMatch = /^sckan-(\d{4})/.exec(mapImp.knowledgeSource || '');
+    const sourceYear = sourceMatch ? Number(sourceMatch[1]) : 0;
+    const isCq27ServiceAvailable = sourceYear >= 2026;
+    const mapUUID = mapImp.mapMetadata.uuid;
+    const flatmapAPI = this.flatmapAPI;
 
-    if (newService) {
-      this.singleConnectivityList = await querySingleConnectivityList(tempFlatmapAPI, tempMapUUID, keastId);
+    connectivitySource = isCq27ServiceAvailable ? 'sckan' : connectivitySource;
+    this.connectivitySource = isCq27ServiceAvailable ? 'sckan' : connectivitySource;
+
+    if (isCq27ServiceAvailable) {
+      this.singleConnectivityList = await querySingleConnectivityList(flatmapAPI, mapUUID, keastId);
     }
 
     return new Promise((resolve) => {
@@ -663,14 +666,14 @@ let FlatmapQueries = function () {
   }
 
   this.queryKnowledge = async (sql, params) => {
-    const url = `${this.flatmapAPI}/knowledge/query/`;
+    const url = `${this.flatmapAPI}knowledge/query/`;
     const query = { sql, params };
     const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            "Accept": "application/json"
-        },
-        body: JSON.stringify(query),
+      method: 'POST',
+      headers: {
+        "Accept": "application/json"
+      },
+      body: JSON.stringify(query),
     })
     if (!response.ok) {
         throw new Error(`Cannot access ${url}`);
