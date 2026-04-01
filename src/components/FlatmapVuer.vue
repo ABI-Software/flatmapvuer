@@ -2133,7 +2133,9 @@ export default {
         }
 
         // Emit error message for connectivity
-        this.emitConnectivityError(errorData)
+        if (errorData.length) {
+          this.emitConnectivityError(errorData);
+        }
 
         // highlight all available features
         const connectivityFeatures = featuresToHighlight.reduce((arr, path) => {
@@ -2380,18 +2382,7 @@ export default {
           })
         } else {
           // clicking on paths
-          const searchTerms = resources.join()
-
-          // for neuron connection mode "all"
-          if (this.connectionType.toLowerCase() === 'all') {
-            this.$emit('neuron-connection-feature-click', {
-              filters: [],
-              search: searchTerms,
-            })
-          } else {
-            // for neuron connection mode "origin", "via" and "destination"
-            await this.openConnectivityInfo(data)
-          }
+          await this.openConnectivityInfo(data);
         }
       } else {
         await this.openConnectivityInfo(data)
@@ -3106,6 +3097,8 @@ export default {
           }
         }
 
+        console.log("tooltip delay")
+
         let promise1 = this.mapManagerRef.loadMap(
           identifier,
           this.eventCallback(),
@@ -3117,7 +3110,7 @@ export default {
             tooltips: this.tooltips,
             minimap: false,
             container: this.$refs.display,
-            // tooltipDelay: 15, // new feature to delay tooltips showing
+            tooltipDelay: 15, // new feature to delay tooltips showing
           }
         )
         promise1
