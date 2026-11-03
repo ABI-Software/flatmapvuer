@@ -1,9 +1,20 @@
 import { querySingleConnectivityList } from '@abi-software/map-utilities';
 
-// remove duplicates by stringifying the objects
+// remove duplicates by comparing the stringified objects, keeping the original elements
 const removeDuplicates = function (arrayOfAnything) {
   if (!arrayOfAnything) return [];
-  return [...new Set(arrayOfAnything.map((e) => JSON.stringify(e)))].map((e) => JSON.parse(e));
+  const seen = new Set();
+  return arrayOfAnything.filter((e) => {
+    const key = JSON.stringify(e);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+// set of stringified elements for exact matching of nodes
+const toKeySet = function (arrayOfAnything) {
+  return new Set((arrayOfAnything || []).map((e) => JSON.stringify(e)));
 };
 
 // remove duplicates for terms with id (UBERON or ILX) and name properties
@@ -23,7 +34,34 @@ const removeDuplicateTerms = function (arrayOfTerms) {
 };
 
 const cachedLabels = {};
-const cachedTaxonLabels = [];
+// taxon => label
+const cachedTaxonLabels = new Map();
+// taxon => in-flight queryLabels promise, shared by concurrent callers
+const pendingTaxonLabels = new Map();
+
+// Cache of raw connectivity responses (as promises, so concurrent requests are shared).
+// Flatmaps are immutable per uuid, so responses can be reused. Least recently used are evicted.
+const MAX_CACHED_RESPONSES = 100;
+const cachedResponses = new Map();
+
+const cachedRequest = function (key, request) {
+  if (cachedResponses.has(key)) {
+    const cached = cachedResponses.get(key);
+    // move to the end to mark as most recently used
+    cachedResponses.delete(key);
+    cachedResponses.set(key, cached);
+    return cached;
+  }
+  const promise = request().catch((error) => {
+    if (cachedResponses.get(key) === promise) cachedResponses.delete(key);
+    throw error;
+  });
+  cachedResponses.set(key, promise);
+  if (cachedResponses.size > MAX_CACHED_RESPONSES) {
+    cachedResponses.delete(cachedResponses.keys().next().value);
+  }
+  return promise;
+};
 
 const findTaxonomyLabel = async function (flatmapAPI, taxonomy) {
   if (cachedLabels && Object.hasOwn(cachedLabels, taxonomy)) {
@@ -52,42 +90,37 @@ const findTaxonomyLabel = async function (flatmapAPI, taxonomy) {
 };
 
 const findTaxonomyLabels = async function (mapImp, taxonomies) {
-  const intersectionTaxonomies = taxonomies.filter((taxonomy) =>
-    cachedTaxonLabels.some((obj) => obj.taxon === taxonomy),
+  const uniqueTaxonomies = [...new Set(taxonomies)];
+  const leftoverTaxonomies = uniqueTaxonomies.filter(
+    (taxonomy) => !cachedTaxonLabels.has(taxonomy) && !pendingTaxonLabels.has(taxonomy),
   );
 
-  const foundCachedTaxonLabels = cachedTaxonLabels.filter((obj) =>
-    intersectionTaxonomies.includes(obj.taxon),
-  );
-
-  const leftoverTaxonomies = taxonomies.filter(
-    (taxonomy) => !intersectionTaxonomies.includes(taxonomy),
-  );
-
-  if (!leftoverTaxonomies.length) {
-    return foundCachedTaxonLabels;
-  } else {
-    const entityLabels = await mapImp.queryLabels(leftoverTaxonomies);
-    if (entityLabels.length) {
-      entityLabels.forEach((entityLabel) => {
-        let { entity: taxon, label } = entityLabel;
-        if (label === 'Mammalia') {
-          label = 'Mammalia not otherwise specified';
-        }
-        const item = { taxon, label };
-        foundCachedTaxonLabels.push(item);
-        cachedTaxonLabels.push(item);
+  if (leftoverTaxonomies.length) {
+    const request = mapImp
+      .queryLabels(leftoverTaxonomies)
+      .then((entityLabels) => {
+        (entityLabels || []).forEach((entityLabel) => {
+          let { entity: taxon, label } = entityLabel;
+          if (label === 'Mammalia') {
+            label = 'Mammalia not otherwise specified';
+          }
+          cachedTaxonLabels.set(taxon, label);
+        });
+      })
+      .finally(() => {
+        leftoverTaxonomies.forEach((taxonomy) => pendingTaxonLabels.delete(taxonomy));
       });
-      return foundCachedTaxonLabels;
-    }
+    leftoverTaxonomies.forEach((taxonomy) => pendingTaxonLabels.set(taxonomy, request));
   }
-};
 
-const inArray = function (ar1, ar2) {
-  if (!ar1 || !ar2) return false;
-  let as1 = JSON.stringify(ar1);
-  let as2 = JSON.stringify(ar2);
-  return as1.indexOf(as2) !== -1;
+  const pending = new Set(
+    uniqueTaxonomies.map((taxonomy) => pendingTaxonLabels.get(taxonomy)).filter(Boolean),
+  );
+  await Promise.all(pending);
+
+  return uniqueTaxonomies
+    .filter((taxonomy) => cachedTaxonLabels.has(taxonomy))
+    .map((taxon) => ({ taxon, label: cachedTaxonLabels.get(taxon) }));
 };
 
 const compareNames = (a, b) => {
@@ -108,73 +141,118 @@ const compareNames = (a, b) => {
   return 0;
 };
 
+// The per path data which is reset for every connectivity query
+const createConnectivityState = function () {
+  return {
+    destinations: [],
+    origins: [],
+    components: [],
+    destinationsWithDatasets: [],
+    originsWithDatasets: [],
+    componentsWithDatasets: [],
+    destinationsCombinations: [],
+    originsCombinations: [],
+    componentsCombinations: [],
+    singleConnectivityList: [],
+    rawURLs: [],
+    expertConsultants: [],
+  };
+};
+
+// Add the SCKAN and Map combination and its map nodes for searching datasets
+const addCombination = function (combinations, withDatasets, value, mapNodeLabels) {
+  const { sckanNodeId, sckanNodeLabel, mapNodeId, mapNodeLabel } = value;
+  combinations.push({
+    sckanId: sckanNodeId,
+    sckanLabel: sckanNodeLabel,
+    mapId: mapNodeId,
+    mapLabel: mapNodeLabel,
+  });
+  mapNodeId.forEach((id, i) => {
+    const stringId = typeof id === 'string' ? id : id[0];
+    if (stringId) {
+      withDatasets.push({
+        id: stringId,
+        name: mapNodeLabels[i],
+      });
+    }
+  });
+};
+
 let FlatmapQueries = function () {
   this.initialise = function (flatmapAPI) {
     this.flatmapAPI = flatmapAPI;
-    this.destinations = [];
-    this.origins = [];
-    this.components = [];
-    this.destinationsWithDatasets = [];
-    this.originsWithDatasets = [];
-    this.componentsWithDatasets = [];
-    this.destinationsCombinations = [];
-    this.originsCombinations = [];
-    this.componentsCombinations = [];
-    this.singleConnectivityList = [];
+    Object.assign(this, createConnectivityState());
     this.hasSingleConnectivityList = false;
-    this.rawURLs = [];
-    this.expertConsultants = [];
     this.controller = undefined;
     this.uberons = [];
     this.lookUp = [];
     this.connectivitySource = 'map'; // 'sckan'
     this.noMapConnectivity = false;
+    this._requestId = 0;
   };
 
-  this.createTooltipData = async function (mapImp, eventData) {
+  this._buildTooltipData = async function (data, mapImp, eventData) {
     let hyperlinks;
-    if (eventData.feature.hyperlinks && eventData.feature.hyperlinks.length > 0) {
+    if (eventData.feature?.hyperlinks && eventData.feature.hyperlinks.length > 0) {
       hyperlinks = eventData.feature.hyperlinks;
     } else {
-      hyperlinks = this.rawURLs;
+      hyperlinks = data.rawURLs;
     }
     let taxonomyLabel = undefined;
     if (eventData.provenanceTaxonomy) {
       taxonomyLabel = [];
       try {
         const entityLabels = await findTaxonomyLabels(mapImp, eventData.provenanceTaxonomy);
-        if (entityLabels.length) {
-          entityLabels.forEach((entityLabel) => {
-            const { label } = entityLabel;
-            taxonomyLabel.push(label);
-          });
-        }
+        entityLabels.forEach((entityLabel) => {
+          taxonomyLabel.push(entityLabel.label);
+        });
       } catch (error) {
         console.log(error);
       }
     }
 
     let tooltipData = {
-      destinations: this.destinations,
-      origins: this.origins,
-      components: this.components,
-      destinationsWithDatasets: removeDuplicateTerms(this.destinationsWithDatasets),
-      originsWithDatasets: removeDuplicateTerms(this.originsWithDatasets),
-      componentsWithDatasets: removeDuplicateTerms(this.componentsWithDatasets),
-      destinationsCombinations: this.destinationsCombinations,
-      originsCombinations: this.originsCombinations,
-      componentsCombinations: this.componentsCombinations,
-      hasSingleConnectivityList: this.singleConnectivityList.length > 0,
+      destinations: data.destinations,
+      origins: data.origins,
+      components: data.components,
+      destinationsWithDatasets: removeDuplicateTerms(data.destinationsWithDatasets),
+      originsWithDatasets: removeDuplicateTerms(data.originsWithDatasets),
+      componentsWithDatasets: removeDuplicateTerms(data.componentsWithDatasets),
+      destinationsCombinations: data.destinationsCombinations,
+      originsCombinations: data.originsCombinations,
+      componentsCombinations: data.componentsCombinations,
+      hasSingleConnectivityList: data.singleConnectivityList.length > 0,
       title: eventData.label,
       featureId: eventData.resource,
       hyperlinks: hyperlinks,
-      'expert-consultants': this.expertConsultants,
+      'expert-consultants': data.expertConsultants,
       provenanceTaxonomy: eventData.provenanceTaxonomy,
       provenanceTaxonomyLabel: taxonomyLabel,
-      connectivitySource: this.connectivitySource,
-      noMapConnectivity: this.noMapConnectivity,
+      connectivitySource: data.connectivitySource,
+      noMapConnectivity: data.noMapConnectivity,
     };
     return tooltipData;
+  };
+
+  this.createTooltipData = async function (mapImp, eventData) {
+    return this._buildTooltipData(this, mapImp, eventData);
+  };
+
+  // Query the knowledge and create the tooltip data without using the instance state,
+  // so tooltips for multiple paths can be created in parallel.
+  this.queryTooltipData = async function (mapImp, eventData) {
+    const keastIds = eventData.resource;
+    let data = {
+      ...createConnectivityState(),
+      connectivitySource: 'map',
+      noMapConnectivity: false,
+    };
+    if (keastIds && keastIds.length > 0 && keastIds[0]) {
+      const { state } = await this._fetchConnectivity(mapImp, keastIds[0], 'map', true);
+      data = { ...data, ...state };
+    }
+    return this._buildTooltipData(data, mapImp, eventData);
   };
 
   this.updateTooltipData = function (tooltipEntry) {
@@ -205,21 +283,25 @@ let FlatmapQueries = function () {
     return labelList;
   };
 
-  this.createLabelLookup = async function (mapImp, uberons) {
-    let uberonMap = {};
-    this.uberons = [];
+  this._buildLabelLookup = async function (mapImp, uberons) {
+    const lookUp = {};
+    const uberonList = [];
     const entityLabels = await findTaxonomyLabels(mapImp, uberons);
-    if (entityLabels.length) {
-      entityLabels.forEach((entityLabel) => {
-        const { taxon: entity, label } = entityLabel;
-        uberonMap[entity] = label;
-        this.uberons.push({
-          id: entity,
-          name: label,
-        });
+    entityLabels.forEach((entityLabel) => {
+      const { taxon: entity, label } = entityLabel;
+      lookUp[entity] = label;
+      uberonList.push({
+        id: entity,
+        name: label,
       });
-    }
-    return uberonMap;
+    });
+    return { lookUp, uberons: uberonList };
+  };
+
+  this.createLabelLookup = async function (mapImp, uberons) {
+    const { lookUp, uberons: uberonList } = await this._buildLabelLookup(mapImp, uberons);
+    this.uberons = uberonList;
+    return lookUp;
   };
 
   this.buildConnectivitySqlStatement = function (keastIds) {
@@ -247,57 +329,30 @@ let FlatmapQueries = function () {
   };
 
   this.findAllIdsFromConnectivity = function (connectivity) {
-    let dnodes = connectivity.connectivity.flat(); // get nodes from edgelist
-    let nodes = [...new Set(dnodes)]; // remove duplicates
-    let found = [];
-    nodes.forEach((n) => {
-      if (Array.isArray(n)) {
-        found.push(n.flat());
-      } else {
-        found.push(n);
-      }
-    });
-    return [...new Set(found.flat())];
+    // edges => nodes => [id, [ids]] => ids
+    return [...new Set(connectivity.connectivity.flat(3))];
   };
 
   this.flattenConnectivity = function (connectivity) {
-    let dnodes = connectivity.flat(); // get nodes from edgelist
-    let nodes = [...new Set(dnodes)]; // remove duplicates
-    let found = [];
-    nodes.forEach((n) => {
-      if (Array.isArray(n)) {
-        found.push(n.flat());
-      } else {
-        found.push(n);
-      }
-    });
-    return found.flat();
+    // nodes => [id, [ids]] => ids
+    return connectivity.flat(3);
   };
 
   this.findComponents = function (connectivity, axons, dendrites, somas) {
     let dnodes = connectivity.connectivity.flat(); // get nodes from edgelist
     let nodes = removeDuplicates(dnodes);
 
-    let found = [];
-    let terminal = false;
-    nodes.forEach((node) => {
-      terminal = false;
-      // Check if the node is an destination or origin (note that they are labelled dendrite and axon as opposed to origin and destination)
-      if (inArray(axons, node)) {
-        terminal = true;
-      }
-      if (somas && inArray(somas, node)) {
-        terminal = true;
-      }
-      if (inArray(dendrites, node)) {
-        terminal = true;
-      }
-      if (!terminal) {
-        found.push(node);
-      }
-    });
+    // Stringify the terminals once instead of for every node, then match the node as a substring
+    const terminals = [axons, somas, dendrites]
+      .filter((terminal) => terminal)
+      .map((terminal) => JSON.stringify(terminal));
 
-    return found;
+    // Keep the nodes which are not destinations or origins
+    // (note that they are labelled dendrite and axon as opposed to origin and destination)
+    return nodes.filter((node) => {
+      const nodeKey = JSON.stringify(node);
+      return !terminals.some((terminal) => terminal.indexOf(nodeKey) !== -1);
+    });
   };
 
   this.retrieveFlatmapKnowledgeForEvent = async function (mapImp, eventData) {
@@ -306,25 +361,14 @@ let FlatmapQueries = function () {
 
     // set up the abort controller
     this.controller = new AbortController();
+    // invalidate any query in progress
+    this._requestId++;
 
     const keastIds = eventData.resource;
-    this.destinations = [];
-    this.origins = [];
-    this.components = [];
-    this.destinationsWithDatasets = [];
-    this.originsWithDatasets = [];
-    this.componentsWithDatasets = [];
-    this.destinationsCombinations = [];
-    this.originsCombinations = [];
-    this.componentsCombinations = [];
-    this.singleConnectivityList = [];
-    this.rawURLs = [];
-    this.expertConsultants = [];
+    Object.assign(this, createConnectivityState());
     if (!keastIds || keastIds.length === 0 || !keastIds[0]) return;
 
-    let prom1 = await this.queryForConnectivityNew(mapImp, keastIds[0]); // This on returns a promise so dont need 'await'
-    let results = await Promise.all([prom1]);
-    return results;
+    return [await this.queryForConnectivityNew(mapImp, keastIds[0])];
   };
 
   this.queryForConnectivityNew = async function (
@@ -333,88 +377,105 @@ let FlatmapQueries = function () {
     connectivitySource = 'map',
     processConnectivity = true,
   ) {
+    const requestId = ++this._requestId;
+    const { state, value } = await this._fetchConnectivity(
+      mapImp,
+      keastId,
+      connectivitySource,
+      processConnectivity,
+    );
+    // Only update the instance state if no newer query has started meanwhile
+    if (requestId === this._requestId) {
+      Object.assign(this, state);
+    }
+    return value;
+  };
+
+  // Query and process the connectivity of a path without changing the instance state.
+  // Returns the state to apply and the value returned by queryForConnectivityNew.
+  this._fetchConnectivity = async function (
+    mapImp,
+    keastId,
+    connectivitySource,
+    processConnectivity,
+  ) {
     // The new service, CQ27, is available for SCKAN knowledge sources from 2026 onward.
     const sourceMatch = /^sckan-(\d{4})/.exec(mapImp.knowledgeSource || '');
     const sourceYear = sourceMatch ? Number(sourceMatch[1]) : 0;
     const isCq27ServiceAvailable = sourceYear >= 2026;
     const mapUUID = mapImp.mapMetadata.uuid;
     const flatmapAPI = this.flatmapAPI;
-    this.connectivitySource = isCq27ServiceAvailable ? 'sckan' : connectivitySource;
+    const state = createConnectivityState();
+    state.connectivitySource = isCq27ServiceAvailable ? 'sckan' : connectivitySource;
 
-    if (isCq27ServiceAvailable) {
-      this.singleConnectivityList = await querySingleConnectivityList(flatmapAPI, mapUUID, keastId);
+    // Start both queries together as they are independent
+    const singleConnectivityListRequest = isCq27ServiceAvailable
+      ? cachedRequest(`cq27|${flatmapAPI}|${mapUUID}|${keastId}`, () =>
+          querySingleConnectivityList(flatmapAPI, mapUUID, keastId),
+        ).catch(() => [])
+      : Promise.resolve([]);
+    const querySckanKnowledge = () =>
+      cachedRequest(`sckan|${flatmapAPI}|${mapUUID}|${keastId}`, () =>
+        mapImp.queryKnowledge(keastId),
+      );
+    const connectivityRequest =
+      state.connectivitySource === 'map'
+        ? cachedRequest(`map|${flatmapAPI}|${mapUUID}|${keastId}`, () =>
+            this.queryMapConnectivity(mapUUID, keastId),
+          )
+        : querySckanKnowledge();
+
+    let value = false;
+    try {
+      let response = await connectivityRequest;
+      state.singleConnectivityList = await singleConnectivityListRequest;
+      if (this.checkConnectivityExists(response)) {
+        if (state.connectivitySource === 'map') {
+          state.noMapConnectivity = false;
+        }
+      } else if (state.connectivitySource === 'map') {
+        // switch to SCKAN
+        // when there has no connectivity data from Map
+        // and add the noMapConnectivity flag to disable the option
+        state.connectivitySource = 'sckan';
+        state.noMapConnectivity = true;
+        response = await querySckanKnowledge().catch(() => undefined);
+      } else {
+        response = undefined;
+      }
+
+      if (this.checkConnectivityExists(response)) {
+        value = response;
+        if (processConnectivity) {
+          const processed = await this._processConnectivity(
+            mapImp,
+            response,
+            state.singleConnectivityList,
+          );
+          Object.assign(state, processed.state);
+          value = processed.value;
+          // response.references is publication urls
+          if (response.references) {
+            // with publications from both PubMed and Others
+            state.rawURLs = [...response.references];
+          }
+          if (response['expert-consultants']) {
+            state.expertConsultants = [...response['expert-consultants']];
+          }
+        }
+      }
+    } catch (error) {
+      state.singleConnectivityList = await singleConnectivityListRequest;
+      if (error.name === 'AbortError') {
+        // This error is from AbortController's abort method.
+      } else {
+        // console.error('Error:', error)
+        // TODO: to update after queryKnowledge method update
+        console.warn(`Unable to get the knowledge for the entity ${keastId}.`);
+      }
+      value = false;
     }
-
-    return new Promise((resolve) => {
-      const queryAPI =
-        this.connectivitySource === 'map'
-          ? this.queryMapConnectivity(mapImp.mapMetadata.uuid, keastId)
-          : mapImp.queryKnowledge(keastId);
-
-      queryAPI
-        .then((response) => {
-          if (this.checkConnectivityExists(response)) {
-            if (this.connectivitySource === 'map') {
-              this.noMapConnectivity = false;
-            }
-            let connectivity = response;
-            if (processConnectivity) {
-              this.processConnectivity(mapImp, connectivity).then((processedConnectivity) => {
-                // response.references is publication urls
-                if (response.references) {
-                  // with publications from both PubMed and Others
-                  this.rawURLs = [...response.references];
-                }
-                if (response['expert-consultants']) {
-                  this.expertConsultants = [...response['expert-consultants']];
-                }
-                resolve(processedConnectivity);
-              });
-            } else resolve(connectivity);
-          } else if (this.connectivitySource === 'map') {
-            // switch to SCKAN
-            // when there has no connectivity data from Map
-            // and add the noMapConnectivity flag to disable the option
-            this.connectivitySource = 'sckan';
-            this.noMapConnectivity = true;
-            mapImp
-              .queryKnowledge(keastId)
-              .then((fallbackResponse) => {
-                if (this.checkConnectivityExists(fallbackResponse)) {
-                  let connectivity = fallbackResponse;
-                  if (processConnectivity) {
-                    this.processConnectivity(mapImp, connectivity).then((processedConnectivity) => {
-                      // response.references is publication urls
-                      if (fallbackResponse.references) {
-                        // with publications from both PubMed and Others
-                        this.rawURLs = [...fallbackResponse.references];
-                      }
-                      if (fallbackResponse['expert-consultants']) {
-                        this.expertConsultants = [...fallbackResponse['expert-consultants']];
-                      }
-                      resolve(processedConnectivity);
-                    });
-                  } else resolve(connectivity);
-                } else {
-                  resolve(false);
-                }
-              })
-              .catch(() => resolve(false));
-          } else {
-            resolve(false);
-          }
-        })
-        .catch((error) => {
-          if (error.name === 'AbortError') {
-            // This error is from AbortController's abort method.
-          } else {
-            // console.error('Error:', error)
-            // TODO: to update after queryKnowledge method update
-            console.warn(`Unable to get the knowledge for the entity ${keastId}.`);
-          }
-          resolve(false);
-        });
-    });
+    return { state, value };
   };
 
   this.queryMapConnectivity = async function (mapuuid, pathId) {
@@ -449,9 +510,11 @@ let FlatmapQueries = function () {
           if (this.connectivityExists(data)) {
             let connectivity = JSON.parse(data.values[0][0]);
             if (processConnectivity) {
-              this.processConnectivity(mapImp, connectivity).then((processedConnectivity) => {
-                resolve(processedConnectivity);
-              });
+              this.processConnectivity(mapImp, connectivity)
+                .then((processedConnectivity) => {
+                  resolve(processedConnectivity);
+                })
+                .catch(() => resolve(false));
             } else resolve(connectivity);
           } else {
             resolve(false);
@@ -473,16 +536,11 @@ let FlatmapQueries = function () {
   };
 
   this.connectivityExists = function (data) {
-    if (
-      data.values &&
-      data.values.length > 0 &&
-      JSON.parse(data.values[0][0]).connectivity &&
-      JSON.parse(data.values[0][0]).connectivity.length > 0
-    ) {
-      return true;
-    } else {
-      return false;
+    if (data.values && data.values.length > 0) {
+      const connectivity = JSON.parse(data.values[0][0]).connectivity;
+      return !!(connectivity && connectivity.length > 0);
     }
+    return false;
   };
 
   // This function is used to determine if a node is a single node or a node with multiple children
@@ -525,154 +583,151 @@ let FlatmapQueries = function () {
     return label;
   };
 
-  this.flattenAndFindDatasets = function (dendrites, components, axons) {
+  // Returns the anatomy with datasets and the SCKAN and Map combinations
+  this._findDatasets = function (dendrites, components, axons, uberons, singleConnectivityList) {
     // process the nodes for finding datasets (Note this is not critical to the tooltip, only for the 'search on components' button)
-    let dendritesFlat = this.flattenConnectivity(dendrites);
-    let componentsFlat = this.flattenConnectivity(components);
-    let axonsFlat = this.flattenConnectivity(axons);
+    const dendritesFlat = new Set(this.flattenConnectivity(dendrites));
+    const componentsFlat = new Set(this.flattenConnectivity(components));
+    const axonsFlat = new Set(this.flattenConnectivity(axons));
 
     // Filter for the anatomy which is annotated on datasets
-    this.originsWithDatasets = this.uberons
-      .filter((ub) => dendritesFlat.indexOf(ub.id) !== -1)
-      .sort(compareNames);
-    this.componentsWithDatasets = this.uberons
-      .filter((ub) => componentsFlat.indexOf(ub.id) !== -1)
-      .sort(compareNames);
-    this.destinationsWithDatasets = this.uberons
-      .filter((ub) => axonsFlat.indexOf(ub.id) !== -1)
-      .sort(compareNames);
+    const result = {
+      originsWithDatasets: uberons.filter((ub) => dendritesFlat.has(ub.id)).sort(compareNames),
+      componentsWithDatasets: uberons.filter((ub) => componentsFlat.has(ub.id)).sort(compareNames),
+      destinationsWithDatasets: uberons.filter((ub) => axonsFlat.has(ub.id)).sort(compareNames),
+      destinationsCombinations: [],
+      originsCombinations: [],
+      componentsCombinations: [],
+    };
 
     // Get combinations of SCKAN and Map
-    if (this.singleConnectivityList.length > 0) {
-      this.singleConnectivityList.forEach((value) => {
-        const { sckanNodeId, sckanNodeLabel, mapNodeId, mapNodeLabel } = value;
-
+    if (singleConnectivityList.length > 0) {
+      const axonKeys = toKeySet(axons);
+      const dendriteKeys = toKeySet(dendrites);
+      const componentKeys = toKeySet(components);
+      singleConnectivityList.forEach((value) => {
         // The base ID is SCKAN ID
-        if (axons.find((axon) => JSON.stringify(axon) === JSON.stringify(sckanNodeId))) {
-          this.destinationsCombinations.push({
-            sckanId: sckanNodeId,
-            sckanLabel: sckanNodeLabel,
-            mapId: mapNodeId,
-            mapLabel: mapNodeLabel,
-          });
-          mapNodeId.forEach((id, i) => {
-            const stringId = typeof id === 'string' ? id : id[0];
-            if (stringId) {
-              this.destinationsWithDatasets.push({
-                id: stringId,
-                name: mapNodeLabel.split(',')[i],
-              });
-            }
-          });
+        const sckanKey = JSON.stringify(value.sckanNodeId);
+        const mapNodeLabels = value.mapNodeLabel.split(',');
+        if (axonKeys.has(sckanKey)) {
+          addCombination(
+            result.destinationsCombinations,
+            result.destinationsWithDatasets,
+            value,
+            mapNodeLabels,
+          );
         }
-        if (
-          dendrites.find((dendrite) => JSON.stringify(dendrite) === JSON.stringify(sckanNodeId))
-        ) {
-          this.originsCombinations.push({
-            sckanId: sckanNodeId,
-            sckanLabel: sckanNodeLabel,
-            mapId: mapNodeId,
-            mapLabel: mapNodeLabel,
-          });
-          mapNodeId.forEach((id, i) => {
-            const stringId = typeof id === 'string' ? id : id[0];
-            if (stringId) {
-              this.originsWithDatasets.push({
-                id: stringId,
-                name: mapNodeLabel.split(',')[i],
-              });
-            }
-          });
+        if (dendriteKeys.has(sckanKey)) {
+          addCombination(
+            result.originsCombinations,
+            result.originsWithDatasets,
+            value,
+            mapNodeLabels,
+          );
         }
-        if (
-          components.find((component) => JSON.stringify(component) === JSON.stringify(sckanNodeId))
-        ) {
-          this.componentsCombinations.push({
-            sckanId: sckanNodeId,
-            sckanLabel: sckanNodeLabel,
-            mapId: mapNodeId,
-            mapLabel: mapNodeLabel,
-          });
-          mapNodeId.forEach((id, i) => {
-            const stringId = typeof id === 'string' ? id : id[0];
-            if (stringId) {
-              this.componentsWithDatasets.push({
-                id: stringId,
-                name: mapNodeLabel.split(',')[i],
-              });
-            }
-          });
+        if (componentKeys.has(sckanKey)) {
+          addCombination(
+            result.componentsCombinations,
+            result.componentsWithDatasets,
+            value,
+            mapNodeLabels,
+          );
         }
       });
     }
+    return result;
   };
 
-  this.processConnectivity = function (mapImp, connectivity) {
-    return new Promise((resolve) => {
-      let dendrites = [];
-      let axons = [];
-      let somas = undefined;
-      if (connectivity && connectivity['node-phenotypes']) {
-        const sourceKey = ['ilxtr:hasSomaLocatedIn'];
-        const destinationKey = [
-          'ilxtr:hasAxonPresynapticElementIn',
-          'ilxtr:hasAxonSensorySubcellularElementIn',
-        ];
-        sourceKey.forEach((key) => {
-          if (key in connectivity['node-phenotypes']) {
-            dendrites.push(...connectivity['node-phenotypes'][key]);
-          }
-        });
-        dendrites = removeDuplicates(dendrites);
-        destinationKey.forEach((key) => {
-          if (key in connectivity['node-phenotypes']) {
-            axons.push(...connectivity['node-phenotypes'][key]);
-          }
-        });
-        axons = removeDuplicates(axons);
-      } else {
-        // Remove duplicates
-        axons = removeDuplicates(connectivity.axons);
-        //Somas will become part of origins, support this for future proof
-        if (connectivity.somas && connectivity.somas.length > 0) {
-          dendrites.push(...connectivity.somas);
-        }
-        if (connectivity.dendrites && connectivity.dendrites.length > 0) {
-          dendrites.push(...connectivity.dendrites);
-        }
-        dendrites = removeDuplicates(dendrites);
-        somas = connectivity.somas;
-      }
+  this.flattenAndFindDatasets = function (dendrites, components, axons) {
+    Object.assign(
+      this,
+      this._findDatasets(dendrites, components, axons, this.uberons, this.singleConnectivityList),
+    );
+  };
 
-      const components = this.findComponents(connectivity, axons, dendrites, somas);
-      // Create list of ids to get labels for
-      const conIds = this.findAllIdsFromConnectivity(connectivity);
-      // Create readable labels from the nodes. Setting this to 'this.origins' updates the display
-      this.createLabelLookup(mapImp, conIds).then((lookUp) => {
-        this.origins = dendrites
-          .map((d) => this.createLabelFromNeuralNode(d, lookUp))
-          .sort(compareNames);
-        this.components = components
-          .map((c) => this.createLabelFromNeuralNode(c, lookUp))
-          .sort(compareNames);
-        this.destinations = axons
-          .map((a) => this.createLabelFromNeuralNode(a, lookUp))
-          .sort(compareNames);
-        this.flattenAndFindDatasets(dendrites, components, axons);
-        resolve({
-          ids: {
-            dendrites: dendrites,
-            components: components,
-            axons: axons,
-          },
-          labels: {
-            origins: this.origins,
-            components: this.components,
-            destinations: this.destinations,
-          },
-        });
+  // Process the connectivity without changing the instance state.
+  // Returns the state to apply and the processed connectivity.
+  this._processConnectivity = async function (mapImp, connectivity, singleConnectivityList) {
+    let dendrites = [];
+    let axons = [];
+    let somas = undefined;
+    if (connectivity && connectivity['node-phenotypes']) {
+      const sourceKey = ['ilxtr:hasSomaLocatedIn'];
+      const destinationKey = [
+        'ilxtr:hasAxonPresynapticElementIn',
+        'ilxtr:hasAxonSensorySubcellularElementIn',
+      ];
+      sourceKey.forEach((key) => {
+        if (key in connectivity['node-phenotypes']) {
+          dendrites.push(...connectivity['node-phenotypes'][key]);
+        }
       });
-    });
+      dendrites = removeDuplicates(dendrites);
+      destinationKey.forEach((key) => {
+        if (key in connectivity['node-phenotypes']) {
+          axons.push(...connectivity['node-phenotypes'][key]);
+        }
+      });
+      axons = removeDuplicates(axons);
+    } else {
+      // Remove duplicates
+      axons = removeDuplicates(connectivity.axons);
+      //Somas will become part of origins, support this for future proof
+      if (connectivity.somas && connectivity.somas.length > 0) {
+        dendrites.push(...connectivity.somas);
+      }
+      if (connectivity.dendrites && connectivity.dendrites.length > 0) {
+        dendrites.push(...connectivity.dendrites);
+      }
+      dendrites = removeDuplicates(dendrites);
+      somas = connectivity.somas;
+    }
+
+    const components = this.findComponents(connectivity, axons, dendrites, somas);
+    // Create list of ids to get labels for
+    const conIds = this.findAllIdsFromConnectivity(connectivity);
+    // Create readable labels from the nodes. Setting this to 'this.origins' updates the display
+    const { lookUp, uberons } = await this._buildLabelLookup(mapImp, conIds);
+    const origins = dendrites
+      .map((d) => this.createLabelFromNeuralNode(d, lookUp))
+      .sort(compareNames);
+    const componentLabels = components
+      .map((c) => this.createLabelFromNeuralNode(c, lookUp))
+      .sort(compareNames);
+    const destinations = axons
+      .map((a) => this.createLabelFromNeuralNode(a, lookUp))
+      .sort(compareNames);
+    return {
+      state: {
+        uberons,
+        origins,
+        components: componentLabels,
+        destinations,
+        ...this._findDatasets(dendrites, components, axons, uberons, singleConnectivityList),
+      },
+      value: {
+        ids: {
+          dendrites: dendrites,
+          components: components,
+          axons: axons,
+        },
+        labels: {
+          origins,
+          components: componentLabels,
+          destinations,
+        },
+      },
+    };
+  };
+
+  this.processConnectivity = async function (mapImp, connectivity) {
+    const { state, value } = await this._processConnectivity(
+      mapImp,
+      connectivity,
+      this.singleConnectivityList,
+    );
+    Object.assign(this, state);
+    return value;
   };
 
   this.buildPubmedSqlStatement = function (keastIds) {
