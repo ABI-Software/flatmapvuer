@@ -21,7 +21,7 @@
           order: 1,
           title: 'Explore the map',
           description:
-            'Hover over a feature on the map to see its name, click on it to see more information such as its connectivity.',
+            '<b>Hover</b> over a feature on the map to see its name, <b>click</b> on it to see more information such as its connectivity.',
           placement: 'bottom',
           target: () => $el.querySelector('.flatmap-popup-popper'),
           onEnter: openFlatmapHelpPopup,
