@@ -266,6 +266,7 @@
               : 'The legends explain the symbols and colours used on this map.',
             placement: 'right',
             onEnter: openHelpModeDrawer,
+            onLeave: restoreHelpModeDrawer,
           }"
           :class="{ open: drawerOpen, close: !drawerOpen }"
           :style="{ 'max-height': pathwaysMaxHeight + 'px' }"
@@ -625,6 +626,9 @@ import EventBus from './EventBus.js';
 import FlatmapError from './FlatmapError.vue';
 
 const ERROR_MESSAGE = 'cannot be found on the map.';
+// The drawer opened for the help is closed after this delay, so it stays open between
+// the help of its items, e.g. the legends then the dataset markers
+const HELP_MODE_DRAWER_RESTORE_DELAY = 500;
 
 const centroid = (geometry) => {
   let featureGeometry = { lng: 0, lat: 0 };
@@ -2393,13 +2397,31 @@ export default {
      * Open the pathway drawer to show the help of the items inside it.
      */
     openHelpModeDrawer: function () {
-      if (this.requiresDrawer) this.drawerOpen = true;
+      clearTimeout(this.helpModeDrawerTimeout);
+      if (!this.requiresDrawer) return;
+      // Remember to close it again if the user had closed it
+      if (!this.drawerOpen) this.helpModeDrawerOpened = true;
+      this.drawerOpen = true;
+    },
+    /**
+     * Close the drawer again if it was opened for the help, see `openHelpModeDrawer`.
+     */
+    restoreHelpModeDrawer: function () {
+      clearTimeout(this.helpModeDrawerTimeout);
+      this.helpModeDrawerTimeout = setTimeout(() => {
+        if (this.helpModeDrawerOpened) this.drawerOpen = false;
+        this.helpModeDrawerOpened = false;
+      }, HELP_MODE_DRAWER_RESTORE_DELAY);
     },
     /**
      * Show the dataset marker in the drawer, which is otherwise only shown on hover.
      */
     setHelpModeMarker: function (visible) {
-      if (visible) this.openHelpModeDrawer();
+      if (visible) {
+        this.openHelpModeDrawer();
+      } else {
+        this.restoreHelpModeDrawer();
+      }
       this.helpModeMarkerVisible = visible;
     },
 
@@ -2518,9 +2540,12 @@ export default {
      * Function to close Flatmap Help Popup.
      */
     closeFlatmapHelpPopup: function () {
-      this.$el.querySelectorAll('.maplibregl-popup-close-button').forEach((item) => {
-        item.click();
-      });
+      // Only the help popup, not a popup the user opened
+      this.$el
+        .querySelectorAll('.flatmap-popup-popper .maplibregl-popup-close-button')
+        .forEach((item) => {
+          item.click();
+        });
     },
     /**
      * @public
@@ -3345,6 +3370,7 @@ export default {
       userApiKey: this.userToken,
       // For the help of the items in the pathway drawer, e.g. in the legends
       openHelpModeDrawer: this.openHelpModeDrawer,
+      restoreHelpModeDrawer: this.restoreHelpModeDrawer,
     };
   },
   data: function () {

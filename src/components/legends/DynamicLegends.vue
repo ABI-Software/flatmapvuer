@@ -28,6 +28,7 @@
                 description: 'Shows the location of the featured dataset on the map.',
                 placement: 'right',
                 onEnter: openHelpModeDrawer,
+                onLeave: restoreHelpModeDrawer,
               }"
               @mouseover="onMouseOver"
               @mouseout="onMouseOut"
@@ -68,6 +69,7 @@ export default {
   },
   inject: {
     openHelpModeDrawer: { default: () => () => {} },
+    restoreHelpModeDrawer: { default: () => () => {} },
   },
   props: {
     identifierKey: {
