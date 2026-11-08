@@ -181,7 +181,8 @@
                 id: 'flatmap-zoom-in',
                 area: 'zoom',
                 title: 'Zoom in',
-                description: 'Zoom in to see more detail. You can also scroll or pinch on the map.',
+                description:
+                  'Zoom in to see more detail. You can also scroll, or pinch open on a touch screen.',
                 placement: 'left',
               }"
               @click="zoomIn()"
@@ -208,7 +209,8 @@
                 id: 'flatmap-zoom-out',
                 area: 'zoom',
                 title: 'Zoom out',
-                description: 'Zoom out to see more of the map.',
+                description:
+                  'Zoom out to see more. You can also scroll, or pinch closed on a touch screen.',
                 placement: 'top',
               }"
               @click="zoomOut()"
@@ -218,7 +220,6 @@
           </template>
         </el-popover>
         <el-popover
-          content="Reset"
           placement="top"
           :teleported="false"
           trigger="hover"
@@ -231,7 +232,7 @@
           <div>
             Fit to
             <br />
-            window
+            view
           </div>
           <template #reference>
             <div
@@ -239,8 +240,8 @@
               v-help-mode="{
                 id: 'flatmap-zoom-fit',
                 area: 'zoom',
-                title: 'Fit to window',
-                description: 'Reset the view so the whole map fits in the window.',
+                title: 'Fit to view',
+                description: 'Reset the zoom and position so everything fits in this view.',
                 placement: 'top',
               }"
               @click="resetView()"
