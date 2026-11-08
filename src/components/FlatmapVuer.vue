@@ -21,7 +21,7 @@
           order: 1,
           title: 'Explore the map',
           description:
-            '<b>Hover</b> over a feature on the map to see its name, <b>click</b> on it to see more information such as its connectivity.',
+            '<b>Hover</b> over a feature on the map to see its name, <b>click</b> on it to see more information (depending on the viewing mode).',
           placement: 'bottom',
           target: () => $el.querySelector('.flatmap-popup-popper'),
           onEnter: openFlatmapHelpPopup,
@@ -111,7 +111,7 @@
                 id: 'flatmap-whats-new',
                 area: 'map-info',
                 title: 'What\'s new?',
-                description: 'See the latest changes and improvements made to this map.',
+                description: 'See the latest changes and improvements made to this viewer.',
                 placement: 'right',
               }"
               v-if="displayLatestChanges"
@@ -263,7 +263,7 @@
             title: showPathwayFilter ? 'Pathways and legends' : 'Legends',
             description: showPathwayFilter
               ? 'Show or hide pathways, systems and other map layers using the checkboxes in this panel.'
-              : 'The legends explain the symbols and colours used on this map.',
+              : 'The legends explain the symbols and colors used on this map.',
             placement: 'right',
             onEnter: openHelpModeDrawer,
             onLeave: restoreHelpModeDrawer,
@@ -532,7 +532,7 @@
                   area: 'map-settings',
                   title: 'Open new map',
                   description:
-                    'Open another map, such as a different species or a connectivity map.',
+                    'Open another map viewer, such as a different species or a connectivity map.',
                   placement: 'right',
                 }"
                 class="icon-button-container"
