@@ -168,7 +168,7 @@
           placement="left"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
@@ -196,7 +196,7 @@
           placement="top-end"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
@@ -223,17 +223,13 @@
           placement="top"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
           ref="zoomFitPopover"
+          content="Fit to view"
         >
-          <div>
-            Fit to
-            <br />
-            view
-          </div>
           <template #reference>
             <div
               class="icon-button-container"
