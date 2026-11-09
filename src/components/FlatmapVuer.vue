@@ -21,7 +21,7 @@
           order: 1,
           title: 'Explore the map',
           description:
-            '<b>Hover</b> over a feature on the map to see its name, <b>click</b> on it to see more information such as its connectivity.',
+            '<b>Hover</b> over a feature on the map to see its name, <b>click</b> on it to see more information (depending on the viewing mode).',
           placement: 'bottom',
           target: () => $el.querySelector('.flatmap-popup-popper'),
           onEnter: openFlatmapHelpPopup,
@@ -111,7 +111,7 @@
                 id: 'flatmap-whats-new',
                 area: 'map-info',
                 title: 'What\'s new?',
-                description: 'See the latest changes and improvements made to this map.',
+                description: 'See the latest changes and improvements made to this viewer.',
                 placement: 'right',
               }"
               v-if="displayLatestChanges"
@@ -168,7 +168,7 @@
           placement="left"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
@@ -181,7 +181,8 @@
                 id: 'flatmap-zoom-in',
                 area: 'zoom',
                 title: 'Zoom in',
-                description: 'Zoom in to see more detail. You can also scroll or pinch on the map.',
+                description:
+                  'Zoom in to see more detail. You can also scroll, or pinch open on a touch screen.',
                 placement: 'left',
               }"
               @click="zoomIn()"
@@ -195,7 +196,7 @@
           placement="top-end"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
@@ -208,7 +209,8 @@
                 id: 'flatmap-zoom-out',
                 area: 'zoom',
                 title: 'Zoom out',
-                description: 'Zoom out to see more of the map.',
+                description:
+                  'Zoom out to see more. You can also scroll, or pinch closed on a touch screen.',
                 placement: 'top',
               }"
               @click="zoomOut()"
@@ -218,29 +220,24 @@
           </template>
         </el-popover>
         <el-popover
-          content="Reset"
           placement="top"
           :teleported="false"
           trigger="hover"
-          width="70"
+          width="max-content"
           popper-class="flatmap-popper"
           :show-after="tooltipDelay"
           :hide-after="tooltipDelay"
           ref="zoomFitPopover"
+          content="Fit to view"
         >
-          <div>
-            Fit to
-            <br />
-            window
-          </div>
           <template #reference>
             <div
               class="icon-button-container"
               v-help-mode="{
                 id: 'flatmap-zoom-fit',
                 area: 'zoom',
-                title: 'Fit to window',
-                description: 'Reset the view so the whole map fits in the window.',
+                title: 'Fit to view',
+                description: 'Reset the zoom and position so everything fits in this view.',
                 placement: 'top',
               }"
               @click="resetView()"
@@ -263,7 +260,7 @@
             title: showPathwayFilter ? 'Pathways and legends' : 'Legends',
             description: showPathwayFilter
               ? 'Show or hide pathways, systems and other map layers using the checkboxes in this panel.'
-              : 'The legends explain the symbols and colours used on this map.',
+              : 'The legends explain the symbols and colors used on this map.',
             placement: 'right',
             onEnter: openHelpModeDrawer,
             onLeave: restoreHelpModeDrawer,
@@ -532,7 +529,7 @@
                   area: 'map-settings',
                   title: 'Open new map',
                   description:
-                    'Open another map, such as a different species or a connectivity map.',
+                    'Open another map viewer, such as a different species or a connectivity map.',
                   placement: 'right',
                 }"
                 class="icon-button-container"

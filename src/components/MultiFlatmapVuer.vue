@@ -9,7 +9,7 @@
           id: 'multiflatmap-species-select',
           area: 'map-info',
           title: 'Select a species',
-          description: 'Switch between the maps of the available species.',
+          description: 'Set the species for this viewer or open the map in new viewer.',
           placement: 'right',
         }"
         :teleported="false"
