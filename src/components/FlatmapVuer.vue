@@ -1911,6 +1911,7 @@ export default {
         const allFeaturesToHighlight = [...featureIdsToHighlight, ...geojsonHighlights];
 
         this.mapImp.selectGeoJSONFeatures(allFeaturesToHighlight);
+        return allFeaturesToHighlight;
       }
     },
     showConnectivitiesByReference: function (resource) {
