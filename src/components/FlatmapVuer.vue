@@ -1909,8 +1909,8 @@ export default {
         const combinedFeatures = [...featuresToHighlight, ...uniqueConnectivityFeatures];
         const featureIdsToHighlight = this.mapImp.modelFeatureIdList(combinedFeatures);
         const allFeaturesToHighlight = [...featureIdsToHighlight, ...geojsonHighlights];
-
         this.mapImp.selectGeoJSONFeatures(allFeaturesToHighlight);
+        return allFeaturesToHighlight;
       }
     },
     showConnectivitiesByReference: function (resource) {
