@@ -25,7 +25,6 @@
   "displayCloseButton": false,
   "initial": "Test",
   "displayMinimap": true,
-  "helpMode": false,
   "pathControls": true,
   "mapSettings": [],
   "flatmapAPI": "https://mapcore-demo.org/devel/flatmap/v4/",

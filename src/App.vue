@@ -8,14 +8,17 @@
       :teleported="false"
     >
       <div class="options-container">
-        <el-row :gutter="20">
-          <el-col :span="8">
-            <el-button @click="helpMode = !helpMode" size="small">Help Mode</el-button>
+        <el-row :gutter="20" type="flex" justify="center">
+          <el-col span="auto">
+            <el-button @click="startHelpTour" size="small">Help Tour</el-button>
           </el-col>
-          <el-col :span="8">
+          <el-col span="auto">
+            <el-button @click="startHelpHover" size="small">Hover Help</el-button>
+          </el-col>
+          <el-col span="auto">
             <el-button @click="saveSettings()" size="small">Save Settings</el-button>
           </el-col>
-          <el-col :span="8">
+          <el-col span="auto">
             <el-button :disabled="mapSettings.length === 0" @click="restoreSettings()" size="small">
               Restore Settings
             </el-button>
@@ -57,12 +60,6 @@
       @ready="FlatmapReady"
       @context-restored="FlatmapReady"
       :initial="initial"
-      :helpMode="helpMode"
-      :helpModeDialog="useHelpModeDialog"
-      :helpModeActiveItem="helpModeActiveItem"
-      @help-mode-last-item="onHelpModeLastItem"
-      @shown-tooltip="onTooltipShown"
-      @shown-map-tooltip="onMapTooltipShown"
       :displayMinimap="true"
       :enableOpenMapUI="true"
       :flatmapAPI="flatmapAPI"
@@ -72,14 +69,8 @@
       @flatmapChanged="onFlatmapChanged"
     />
 
-    <HelpModeDialog
-      v-if="helpMode && useHelpModeDialog"
-      ref="multiflatmapHelp"
-      :multiflatmapRef="multiflatmapRef"
-      :lastItem="helpModeLastItem"
-      @show-next="onHelpModeShowNext"
-      @finish-help-mode="onFinishHelpMode"
-    />
+    <HelpModeTour v-model="helpTourOpen" :steps="helpTourSteps" />
+    <HelpModeHover v-model="helpHoverOpen" :steps="helpTourSteps" />
   </div>
 </template>
 
@@ -89,14 +80,15 @@ import { markRaw, shallowRef } from 'vue';
 import { Setting as ElIconSetting } from '@element-plus/icons-vue';
 import './icons/mapicon-species-style.css';
 import MultiFlatmapVuer from './components/MultiFlatmapVuer.vue';
-import { HelpModeDialog } from '@abi-software/map-utilities';
+import { HelpModeHover, HelpModeTour } from '@abi-software/map-utilities';
 import '@abi-software/map-utilities/dist/style.css';
 
 export default {
   name: 'app',
   components: {
     MultiFlatmapVuer,
-    HelpModeDialog,
+    HelpModeTour,
+    HelpModeHover,
   },
   methods: {
     saveSettings: function () {
@@ -166,35 +158,18 @@ export default {
       this.$refs.multi.getCurrentFlatmap().searchAndShowResult(this.searchText, true);
     },
     onFlatmapChanged: function (activeSpecies) {
-      this.helpMode = false;
       // Update current flatmapImp after changing species
       if (this.$refs.multi.$refs[activeSpecies][0].mapImp) {
         window.flatmapImp = this.$refs.multi.$refs[activeSpecies][0].mapImp;
       }
     },
-    onHelpModeShowNext: function () {
-      this.helpModeActiveItem += 1;
+    startHelpTour: function () {
+      this.helpTourSteps = this.$refs.multi.getHelpModeSteps();
+      this.helpTourOpen = true;
     },
-    onHelpModeLastItem: function (isLastItem) {
-      if (isLastItem) {
-        this.helpModeLastItem = true;
-      }
-    },
-    onFinishHelpMode: function () {
-      this.helpMode = false;
-      // reset help mode to default values
-      this.helpModeActiveItem = 0;
-      this.helpModeLastItem = false;
-    },
-    onTooltipShown: function () {
-      if (this.$refs.multi && this.$refs.multiflatmapHelp) {
-        this.$refs.multiflatmapHelp.toggleTooltipHighlight();
-      }
-    },
-    onMapTooltipShown: function () {
-      if (this.$refs.multi && this.$refs.multiflatmapHelp) {
-        this.$refs.multiflatmapHelp.toggleTooltipPinHighlight();
-      }
+    startHelpHover: function () {
+      this.helpTourSteps = this.$refs.multi.getHelpModeSteps();
+      this.helpHoverOpen = true;
     },
   },
   provide() {
@@ -268,10 +243,9 @@ export default {
       },
       displayCloseButton: false,
       initial: 'Human Male',
-      helpMode: false,
-      helpModeActiveItem: 0,
-      helpModeLastItem: false,
-      useHelpModeDialog: true,
+      helpTourOpen: false,
+      helpTourSteps: [],
+      helpHoverOpen: false,
       multiflatmapRef: null,
       mapSettings: [],
       // flatmapAPI: 'https://mapcore-demo.org/current/flatmap/v2/'
@@ -333,13 +307,6 @@ export default {
     this.multiflatmapRef = this.$refs.multi;
     window.multiflatmapRef = this.multiflatmapRef;
     //window.flatmapRef = this.multiflatmapRef.getCurrentFlatmap();
-  },
-  watch: {
-    helpMode: function (newVal) {
-      if (!newVal) {
-        this.helpModeActiveItem = 0;
-      }
-    },
   },
 };
 </script>
