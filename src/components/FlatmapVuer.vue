@@ -31,7 +31,7 @@
       <!-- flatmap-error -->
       <FlatmapError v-if="flatmapError" :flatmapError="flatmapError" />
 
-      <div class="beta-popovers" v-show="!disableUI">
+      <div class="beta-popovers" v-show="!disableUI" data-help-scope>
         <div>
           <el-popover
             v-if="displayWarning || isLegacy"
@@ -162,7 +162,7 @@
         ref="toolbarPopover"
       />
 
-      <div class="bottom-right-control" v-show="!disableUI">
+      <div class="bottom-right-control" v-show="!disableUI" data-help-scope>
         <el-popover
           content="Zoom in"
           placement="left"
@@ -251,6 +251,7 @@
         class="pathway-location"
         :class="{ open: drawerOpen, close: !drawerOpen }"
         v-show="!disableUI && requiresDrawer"
+        data-help-scope
       >
         <div
           class="pathway-container"
@@ -508,6 +509,7 @@
         class="settings-group"
         :class="{ open: drawerOpen, close: !drawerOpen }"
         v-show="!disableUI"
+        data-help-scope
       >
         <el-row v-if="showOpenMapButton">
           <el-popover
