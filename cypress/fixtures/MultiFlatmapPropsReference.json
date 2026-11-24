@@ -37,7 +37,6 @@
   "displayCloseButton": false,
   "initial": "Human Female",
   "displayMinimap": false,
-  "helpMode": false,
   "pathControls": true,
   "mapSettings": [],
   "flatmapAPI": "https://mapcore-demo.org/current/flatmap/v3/",

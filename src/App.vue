@@ -8,15 +8,17 @@
       :teleported="false"
     >
       <div class="options-container">
-        <el-row :gutter="20">
-          <el-col :span="8">
+        <el-row :gutter="20" type="flex" justify="center">
+          <el-col span="auto">
             <el-button @click="startHelpTour" size="small">Help Tour</el-button>
+          </el-col>
+          <el-col span="auto">
             <el-button @click="startHelpHover" size="small">Hover Help</el-button>
           </el-col>
-          <el-col :span="8">
+          <el-col span="auto">
             <el-button @click="saveSettings()" size="small">Save Settings</el-button>
           </el-col>
-          <el-col :span="8">
+          <el-col span="auto">
             <el-button :disabled="mapSettings.length === 0" @click="restoreSettings()" size="small">
               Restore Settings
             </el-button>
